@@ -371,7 +371,7 @@ describe('stripHtml', () => {
   });
 
   it('should decode HTML entities', () => {
-    assert.strictEqual(stripHtml('&amp; &lt; &gt; &quot; &#39;'), '& < > " \'');
+    assert.strictEqual(stripHtml('&amp; &lt; &gt; &quot; &#39;'), "& < > \" '");
   });
 
   it('should handle empty/null input', () => {

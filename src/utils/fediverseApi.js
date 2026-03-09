@@ -114,6 +114,7 @@ async function fetchProfile(instance, username) {
         response = await axios.post(`${baseUrl}${endpoint.url}`, endpoint.body, {
           headers: { ...headers, 'Content-Type': 'application/json' },
           timeout: REQUEST_TIMEOUT,
+          maxRedirects: 5,
           validateStatus: (status) => status >= 200 && status < 300
         });
       } else {
