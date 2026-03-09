@@ -146,7 +146,8 @@ vxfedi/
 │   ├── index.js              # Main Express server
 │   └── utils/
 │       ├── urlParser.js      # Parse vxfedi URLs
-│       ├── fediverseApi.js   # Fetch from Fediverse instances
+│       ├── instanceDetector.js # NodeInfo-based instance discovery
+│       ├── fediverseApi.js   # Fetch from Fediverse instances (multi-adapter)
 │       ├── metaGenerator.js  # Generate Open Graph/Twitter Card metadata
 │       ├── pageRenderer.js   # Render HTML landing pages
 │       └── userAgent.js      # Detect bots vs. users
@@ -158,10 +159,11 @@ vxfedi/
 ## 🤖 How It Works
 
 1. **URL Parsing** - Extracts instance, username, and post/profile ID from vxfedi URL
-2. **Content Fetching** - Queries the Fediverse instance using Mastodon API and/or ActivityPub
-3. **Bot Detection** - Checks User-Agent to identify crawlers (Discord, Twitter, etc.)
-4. **For Bots:** Renders HTML with rich Open Graph, Twitter Card, and oEmbed metadata
-5. **For Users:** Redirects to the original Fediverse content
+2. **Instance Discovery** - Detects the Fediverse software via NodeInfo (Mastodon, Misskey, GoToSocial, Pleroma/Akkoma, Pixelfed, etc.)
+3. **Smart Routing** - Prioritizes the correct API adapter based on the detected software, with fallback to other endpoints
+4. **Bot Detection** - Checks User-Agent to identify crawlers (Discord, Twitter, etc.)
+5. **For Bots:** Renders HTML with rich Open Graph, Twitter Card, and oEmbed metadata
+6. **For Users:** Redirects to the original Fediverse content
 
 ## 🌟 Platform Support
 

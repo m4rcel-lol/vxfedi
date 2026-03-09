@@ -1,20 +1,24 @@
 const axios = require('axios');
+const { detectInstanceType } = require('./instanceDetector');
 
 const USER_AGENT = process.env.USER_AGENT || 'vxfedi/1.0 (https://github.com/m4rcel-lol/vxfedi)';
 const REQUEST_TIMEOUT = parseInt(process.env.REQUEST_TIMEOUT) || 10000;
 
 /**
  * Fetch content from Fediverse instance
- * Tries multiple API endpoints and formats
+ * Detects instance type via NodeInfo and routes to the appropriate adapter
  */
 async function fetchFediverseContent(parsed) {
   const { instance, username, postId, resourceType, originalUrl } = parsed;
 
   try {
+    // Detect instance software type for smart routing
+    const instanceType = await detectInstanceType(instance);
+
     if (resourceType === 'post') {
-      return await fetchPost(instance, username, postId);
+      return await fetchPost(instance, username, postId, instanceType);
     } else if (resourceType === 'profile') {
-      return await fetchProfile(instance, username);
+      return await fetchProfile(instance, username, instanceType);
     }
   } catch (error) {
     console.error('Error fetching Fediverse content:', error.message);
@@ -26,24 +30,13 @@ async function fetchFediverseContent(parsed) {
 
 /**
  * Fetch a post/status from a Fediverse instance
+ * Uses detected instance type to prioritize the most likely API endpoint
  */
-async function fetchPost(instance, username, postId) {
+async function fetchPost(instance, username, postId, instanceType) {
   const baseUrl = `https://${instance}`;
 
-  // Try different API endpoints in order of preference
-  const endpoints = [
-    // Mastodon API v1 (most common, works on Mastodon, GoToSocial, Pleroma/Akkoma)
-    `/api/v1/statuses/${postId}`,
-    // Misskey/Firefish/Sharkey API
-    `/api/notes/show`,
-    // ActivityPub endpoints (with Accept header)
-    username ? `/@${username}/statuses/${postId}` : null, // GoToSocial format
-    username ? `/@${username}/${postId}` : null, // Mastodon format
-    username ? `/users/${username}/statuses/${postId}` : null, // ActivityPub format
-    `/notice/${postId}`, // Pleroma/Akkoma format
-    `/objects/${postId}`, // Pleroma/Akkoma ActivityPub objects
-    `/notes/${postId}`, // Misskey/Firefish/Sharkey
-  ].filter(Boolean);
+  // Build ordered endpoints based on detected instance type
+  const endpoints = buildPostEndpoints(instanceType, username, postId);
 
   for (const endpoint of endpoints) {
     try {
@@ -86,20 +79,13 @@ async function fetchPost(instance, username, postId) {
 
 /**
  * Fetch a profile from a Fediverse instance
+ * Uses detected instance type to prioritize the most likely API endpoint
  */
-async function fetchProfile(instance, username) {
+async function fetchProfile(instance, username, instanceType) {
   const baseUrl = `https://${instance}`;
 
-  // Try different API endpoints
-  const endpoints = [
-    // Mastodon API (works on Mastodon, GoToSocial, Pleroma/Akkoma)
-    { url: `/api/v1/accounts/lookup?acct=${username}`, method: 'GET' },
-    // Misskey/Firefish/Sharkey API
-    { url: `/api/users/show`, method: 'POST', body: { username } },
-    // ActivityPub endpoint
-    { url: `/@${username}`, method: 'GET' },
-    { url: `/users/${username}`, method: 'GET' },
-  ];
+  // Build ordered endpoints based on detected instance type
+  const endpoints = buildProfileEndpoints(instanceType, username);
 
   for (const endpoint of endpoints) {
     try {
@@ -135,6 +121,76 @@ async function fetchProfile(instance, username) {
   }
 
   return null;
+}
+
+/**
+ * Build ordered list of post API endpoints based on detected instance type
+ * Prioritizes the most likely endpoint while keeping all others as fallbacks
+ */
+function buildPostEndpoints(instanceType, username, postId) {
+  // All possible endpoints
+  const mastodonApi = `/api/v1/statuses/${postId}`;
+  const misskeyApi = `/api/notes/show`;
+  const gotoSocialAp = username ? `/@${username}/statuses/${postId}` : null;
+  const mastodonAp = username ? `/@${username}/${postId}` : null;
+  const activityPubAp = username ? `/users/${username}/statuses/${postId}` : null;
+  const pleromaNotice = `/notice/${postId}`;
+  const pleromaObjects = `/objects/${postId}`;
+  const misskeyNotes = `/notes/${postId}`;
+
+  // Default order (for unknown instance types)
+  const allEndpoints = [
+    mastodonApi, misskeyApi, gotoSocialAp, mastodonAp,
+    activityPubAp, pleromaNotice, pleromaObjects, misskeyNotes
+  ];
+
+  let ordered;
+  switch (instanceType) {
+    case 'mastodon':
+      ordered = [mastodonApi, mastodonAp, activityPubAp, gotoSocialAp, misskeyApi, pleromaNotice, pleromaObjects, misskeyNotes];
+      break;
+    case 'gotosocial':
+      ordered = [mastodonApi, gotoSocialAp, activityPubAp, mastodonAp, misskeyApi, pleromaNotice, pleromaObjects, misskeyNotes];
+      break;
+    case 'pleroma':
+      ordered = [mastodonApi, pleromaNotice, pleromaObjects, mastodonAp, activityPubAp, gotoSocialAp, misskeyApi, misskeyNotes];
+      break;
+    case 'misskey':
+      ordered = [misskeyApi, misskeyNotes, mastodonApi, mastodonAp, activityPubAp, gotoSocialAp, pleromaNotice, pleromaObjects];
+      break;
+    case 'pixelfed':
+      ordered = [mastodonApi, mastodonAp, activityPubAp, gotoSocialAp, misskeyApi, pleromaNotice, pleromaObjects, misskeyNotes];
+      break;
+    default:
+      ordered = allEndpoints;
+  }
+
+  return ordered.filter(Boolean);
+}
+
+/**
+ * Build ordered list of profile API endpoints based on detected instance type
+ * Prioritizes the most likely endpoint while keeping all others as fallbacks
+ */
+function buildProfileEndpoints(instanceType, username) {
+  // All possible endpoints
+  const mastodonApi = { url: `/api/v1/accounts/lookup?acct=${username}`, method: 'GET' };
+  const misskeyApi = { url: `/api/users/show`, method: 'POST', body: { username } };
+  const activityPubAt = { url: `/@${username}`, method: 'GET' };
+  const activityPubUsers = { url: `/users/${username}`, method: 'GET' };
+
+  switch (instanceType) {
+    case 'mastodon':
+    case 'gotosocial':
+    case 'pixelfed':
+      return [mastodonApi, activityPubAt, activityPubUsers, misskeyApi];
+    case 'pleroma':
+      return [mastodonApi, activityPubAt, activityPubUsers, misskeyApi];
+    case 'misskey':
+      return [misskeyApi, activityPubAt, activityPubUsers, mastodonApi];
+    default:
+      return [mastodonApi, misskeyApi, activityPubAt, activityPubUsers];
+  }
 }
 
 /**
@@ -397,5 +453,7 @@ module.exports = {
   truncateText,
   parseMediaAttachments,
   parseActivityPubMedia,
-  parseMisskeyMedia
+  parseMisskeyMedia,
+  buildPostEndpoints,
+  buildProfileEndpoints
 };
