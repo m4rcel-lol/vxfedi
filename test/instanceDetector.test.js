@@ -8,6 +8,7 @@ describe('SOFTWARE_FAMILIES', () => {
     assert.ok(SOFTWARE_FAMILIES.mastodon.includes('mastodon'));
     assert.ok(SOFTWARE_FAMILIES.mastodon.includes('hometown'));
     assert.ok(SOFTWARE_FAMILIES.mastodon.includes('glitch-soc'));
+    assert.ok(SOFTWARE_FAMILIES.mastodon.includes('ecko'));
   });
 
   it('should include GoToSocial', () => {
@@ -26,6 +27,8 @@ describe('SOFTWARE_FAMILIES', () => {
     assert.ok(SOFTWARE_FAMILIES.misskey.includes('calckey'));
     assert.ok(SOFTWARE_FAMILIES.misskey.includes('foundkey'));
     assert.ok(SOFTWARE_FAMILIES.misskey.includes('iceshrimp'));
+    assert.ok(SOFTWARE_FAMILIES.misskey.includes('catodon'));
+    assert.ok(SOFTWARE_FAMILIES.misskey.includes('cherrypick'));
   });
 
   it('should include Pixelfed', () => {
