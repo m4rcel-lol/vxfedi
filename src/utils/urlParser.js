@@ -2,11 +2,15 @@
  * Parse vxfedi URL to extract instance and resource information
  *
  * Supported formats:
- * - /instance.tld/@username/postid (post)
- * - /instance.tld/@username/statuses/postid (post - GoToSocial format)
- * - /instance.tld/@username (profile)
- * - /instance.tld/users/username/statuses/postid (alternative post format)
- * - /instance.tld/users/username (alternative profile format)
+ * - /instance.tld/@username/postid (post - Mastodon)
+ * - /instance.tld/@username/statuses/postid (post - GoToSocial)
+ * - /instance.tld/@username (profile - Mastodon/GoToSocial)
+ * - /instance.tld/users/username/statuses/postid (post - ActivityPub)
+ * - /instance.tld/users/username (profile - ActivityPub)
+ * - /instance.tld/notice/postid (post - Pleroma/Akkoma)
+ * - /instance.tld/objects/uuid (post - Pleroma/Akkoma ActivityPub)
+ * - /instance.tld/notes/noteid (post - Misskey/Firefish/Sharkey)
+ * - /instance.tld/p/username/postid (post - Pixelfed)
  */
 function parseVxUrl(path) {
   // Remove leading/trailing slashes
@@ -44,12 +48,12 @@ function parseVxUrl(path) {
       resourceType = 'profile';
       originalUrl = `https://${instance}/@${username}`;
     } else if (parts.length === 3) {
-      // Post: /instance.tld/@username/postid
+      // Post: /instance.tld/@username/postid (Mastodon)
       resourceType = 'post';
       postId = parts[2];
       originalUrl = `https://${instance}/@${username}/${postId}`;
     } else if (parts.length === 4 && parts[2] === 'statuses') {
-      // Post (GoToSocial format): /instance.tld/@username/statuses/postid
+      // Post (GoToSocial): /instance.tld/@username/statuses/postid
       resourceType = 'post';
       postId = parts[3];
       originalUrl = `https://${instance}/@${username}/statuses/${postId}`;
@@ -74,11 +78,30 @@ function parseVxUrl(path) {
       return null;
     }
   }
-  // Format 3: Direct status ID (some instances use /instance.tld/@username/statusid or /instance.tld/notice/id)
+  // Format 3: /notice/postid (Pleroma/Akkoma)
   else if (parts[1] === 'notice' && parts.length === 3) {
     resourceType = 'post';
     postId = parts[2];
     originalUrl = `https://${instance}/notice/${postId}`;
+  }
+  // Format 4: /objects/uuid (Pleroma/Akkoma ActivityPub)
+  else if (parts[1] === 'objects' && parts.length === 3) {
+    resourceType = 'post';
+    postId = parts[2];
+    originalUrl = `https://${instance}/objects/${postId}`;
+  }
+  // Format 5: /notes/noteid (Misskey/Firefish/Sharkey)
+  else if (parts[1] === 'notes' && parts.length === 3) {
+    resourceType = 'post';
+    postId = parts[2];
+    originalUrl = `https://${instance}/notes/${postId}`;
+  }
+  // Format 6: /p/username/postid (Pixelfed)
+  else if (parts[1] === 'p' && parts.length === 4) {
+    resourceType = 'post';
+    username = parts[2];
+    postId = parts[3];
+    originalUrl = `https://${instance}/p/${username}/${postId}`;
   }
   else {
     return null;

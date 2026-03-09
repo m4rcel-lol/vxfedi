@@ -32,12 +32,17 @@ async function fetchPost(instance, username, postId) {
 
   // Try different API endpoints in order of preference
   const endpoints = [
-    // Mastodon API v1 (most common)
+    // Mastodon API v1 (most common, works on Mastodon, GoToSocial, Pleroma/Akkoma)
     `/api/v1/statuses/${postId}`,
-    // ActivityPub endpoint (with Accept header)
-    username ? `/@${username}/${postId}` : `/notice/${postId}`,
-    // Alternative format
-    username ? `/users/${username}/statuses/${postId}` : null,
+    // Misskey/Firefish/Sharkey API
+    `/api/notes/show`,
+    // ActivityPub endpoints (with Accept header)
+    username ? `/@${username}/statuses/${postId}` : null, // GoToSocial format
+    username ? `/@${username}/${postId}` : null, // Mastodon format
+    username ? `/users/${username}/statuses/${postId}` : null, // ActivityPub format
+    `/notice/${postId}`, // Pleroma/Akkoma format
+    `/objects/${postId}`, // Pleroma/Akkoma ActivityPub objects
+    `/notes/${postId}`, // Misskey/Firefish/Sharkey
   ].filter(Boolean);
 
   for (const endpoint of endpoints) {
@@ -47,12 +52,25 @@ async function fetchPost(instance, username, postId) {
         'Accept': 'application/activity+json, application/ld+json, application/json'
       };
 
-      const response = await axios.get(`${baseUrl}${endpoint}`, {
-        headers,
-        timeout: REQUEST_TIMEOUT,
-        maxRedirects: 5,
-        validateStatus: (status) => status >= 200 && status < 300
-      });
+      let response;
+
+      // Misskey/Firefish/Sharkey uses POST for API
+      if (endpoint === '/api/notes/show') {
+        response = await axios.post(`${baseUrl}${endpoint}`, {
+          noteId: postId
+        }, {
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          timeout: REQUEST_TIMEOUT,
+          validateStatus: (status) => status >= 200 && status < 300
+        });
+      } else {
+        response = await axios.get(`${baseUrl}${endpoint}`, {
+          headers,
+          timeout: REQUEST_TIMEOUT,
+          maxRedirects: 5,
+          validateStatus: (status) => status >= 200 && status < 300
+        });
+      }
 
       if (response.data) {
         return parsePostData(response.data, instance, postId);
@@ -107,11 +125,11 @@ async function fetchProfile(instance, username) {
 }
 
 /**
- * Parse post data from various formats (Mastodon API, ActivityPub)
+ * Parse post data from various formats (Mastodon API, ActivityPub, Misskey)
  */
 function parsePostData(data, instance, postId) {
-  // Mastodon API format
-  if (data.content !== undefined) {
+  // Mastodon/GoToSocial/Pleroma API format (has content and account fields)
+  if (data.content !== undefined && data.account !== undefined) {
     return {
       type: 'post',
       id: data.id || postId,
@@ -132,6 +150,33 @@ function parsePostData(data, instance, postId) {
       instance: instance,
       title: generatePostTitle(data),
       description: truncateText(stripHtml(data.content), 200)
+    };
+  }
+
+  // Misskey/Firefish/Sharkey API format (has text and user fields)
+  if (data.text !== undefined && data.user !== undefined) {
+    const content = data.text || '';
+    const author = data.user?.name || data.user?.username || 'Unknown';
+    return {
+      type: 'post',
+      id: data.id || postId,
+      url: `https://${instance}/notes/${data.id || postId}`,
+      content: content,
+      contentHtml: content,
+      author: author,
+      authorUsername: data.user?.username,
+      authorUrl: `https://${instance}/@${data.user?.username}`,
+      authorAvatar: data.user?.avatarUrl,
+      createdAt: data.createdAt,
+      repliesCount: data.repliesCount || 0,
+      reblogsCount: data.renoteCount || 0,
+      favouritesCount: data.reactions ? Object.values(data.reactions).reduce((a, b) => a + b, 0) : 0,
+      mediaAttachments: parseMisskeyMedia(data.files),
+      sensitive: data.cw != null,
+      spoilerText: data.cw || '',
+      instance: instance,
+      title: `${author} on ${instance}: "${truncateText(content, 60) || 'Post'}"`,
+      description: truncateText(content, 200)
     };
   }
 
@@ -240,6 +285,22 @@ function parseActivityPubMedia(attachments) {
     url: media.url,
     previewUrl: media.url,
     description: media.name || '',
+  }));
+}
+
+/**
+ * Parse media attachments from Misskey/Firefish/Sharkey format
+ */
+function parseMisskeyMedia(files) {
+  if (!files || !Array.isArray(files)) {
+    return [];
+  }
+
+  return files.map(file => ({
+    type: file.type?.startsWith('image') ? 'image' : file.type?.startsWith('video') ? 'video' : 'unknown',
+    url: file.url,
+    previewUrl: file.thumbnailUrl || file.url,
+    description: file.comment || file.name || '',
   }));
 }
 
