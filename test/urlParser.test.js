@@ -135,7 +135,7 @@ describe('parseVxUrl', () => {
       assert.strictEqual(parseVxUrl('/instance.tld'), null);
     });
 
-    it('should return null for domain with @ in it', () => {
+    it('should return null for path starting with @ as first segment', () => {
       assert.strictEqual(parseVxUrl('/@user.tld/something'), null);
     });
 
