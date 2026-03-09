@@ -3,6 +3,7 @@
  *
  * Supported formats:
  * - /instance.tld/@username/postid (post)
+ * - /instance.tld/@username/statuses/postid (post - GoToSocial format)
  * - /instance.tld/@username (profile)
  * - /instance.tld/users/username/statuses/postid (alternative post format)
  * - /instance.tld/users/username (alternative profile format)
@@ -34,7 +35,7 @@ function parseVxUrl(path) {
   let postId = null;
   let originalUrl = null;
 
-  // Format 1: /@username or /@username/postid
+  // Format 1: /@username or /@username/postid or /@username/statuses/postid
   if (parts[1].startsWith('@')) {
     username = parts[1].substring(1); // Remove @ prefix
 
@@ -47,6 +48,11 @@ function parseVxUrl(path) {
       resourceType = 'post';
       postId = parts[2];
       originalUrl = `https://${instance}/@${username}/${postId}`;
+    } else if (parts.length === 4 && parts[2] === 'statuses') {
+      // Post (GoToSocial format): /instance.tld/@username/statuses/postid
+      resourceType = 'post';
+      postId = parts[3];
+      originalUrl = `https://${instance}/@${username}/statuses/${postId}`;
     } else {
       return null;
     }
