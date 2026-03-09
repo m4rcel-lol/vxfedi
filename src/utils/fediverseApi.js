@@ -92,11 +92,13 @@ async function fetchProfile(instance, username) {
 
   // Try different API endpoints
   const endpoints = [
-    // Mastodon API
-    `/api/v1/accounts/lookup?acct=${username}`,
+    // Mastodon API (works on Mastodon, GoToSocial, Pleroma/Akkoma)
+    { url: `/api/v1/accounts/lookup?acct=${username}`, method: 'GET' },
+    // Misskey/Firefish/Sharkey API
+    { url: `/api/users/show`, method: 'POST', body: { username } },
     // ActivityPub endpoint
-    `/@${username}`,
-    `/users/${username}`,
+    { url: `/@${username}`, method: 'GET' },
+    { url: `/users/${username}`, method: 'GET' },
   ];
 
   for (const endpoint of endpoints) {
@@ -106,12 +108,22 @@ async function fetchProfile(instance, username) {
         'Accept': 'application/activity+json, application/ld+json, application/json'
       };
 
-      const response = await axios.get(`${baseUrl}${endpoint}`, {
-        headers,
-        timeout: REQUEST_TIMEOUT,
-        maxRedirects: 5,
-        validateStatus: (status) => status >= 200 && status < 300
-      });
+      let response;
+
+      if (endpoint.method === 'POST') {
+        response = await axios.post(`${baseUrl}${endpoint.url}`, endpoint.body, {
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          timeout: REQUEST_TIMEOUT,
+          validateStatus: (status) => status >= 200 && status < 300
+        });
+      } else {
+        response = await axios.get(`${baseUrl}${endpoint.url}`, {
+          headers,
+          timeout: REQUEST_TIMEOUT,
+          maxRedirects: 5,
+          validateStatus: (status) => status >= 200 && status < 300
+        });
+      }
 
       if (response.data) {
         return parseProfileData(response.data, instance, username);
@@ -207,8 +219,8 @@ function parsePostData(data, instance, postId) {
  * Parse profile data from various formats
  */
 function parseProfileData(data, instance, username) {
-  // Mastodon API format
-  if (data.username !== undefined) {
+  // Mastodon/GoToSocial/Pleroma API format (has username and acct)
+  if (data.username !== undefined && data.acct !== undefined) {
     return {
       type: 'profile',
       id: data.id,
@@ -230,6 +242,33 @@ function parseProfileData(data, instance, username) {
       title: `${data.display_name || data.username} (@${data.acct}) - Fediverse Profile`,
       description: truncateText(stripHtml(data.note || ''), 200) || `Follow ${data.display_name || data.username} on the Fediverse`,
       thumbnail: data.avatar || data.header
+    };
+  }
+
+  // Misskey/Firefish/Sharkey API format (has username and avatarUrl)
+  if (data.username !== undefined && data.avatarUrl !== undefined) {
+    const displayName = data.name || data.username;
+    return {
+      type: 'profile',
+      id: data.id,
+      username: data.username,
+      displayName: displayName,
+      acct: data.username,
+      url: `https://${instance}/@${data.username}`,
+      avatar: data.avatarUrl,
+      header: data.bannerUrl,
+      note: data.description ? stripHtml(data.description) : '',
+      noteHtml: data.description,
+      followersCount: data.followersCount || 0,
+      followingCount: data.followingCount || 0,
+      statusesCount: data.notesCount || 0,
+      bot: data.isBot || false,
+      locked: data.isLocked || false,
+      createdAt: data.createdAt,
+      instance: instance,
+      title: `${displayName} (@${data.username}@${instance}) - Fediverse Profile`,
+      description: truncateText(data.description ? stripHtml(data.description) : '', 200) || `Follow ${displayName} on the Fediverse`,
+      thumbnail: data.avatarUrl || data.bannerUrl
     };
   }
 
@@ -349,5 +388,13 @@ function truncateText(text, maxLength) {
 module.exports = {
   fetchFediverseContent,
   fetchPost,
-  fetchProfile
+  fetchProfile,
+  // Internal functions exported for testing
+  parsePostData,
+  parseProfileData,
+  stripHtml,
+  truncateText,
+  parseMediaAttachments,
+  parseActivityPubMedia,
+  parseMisskeyMedia
 };

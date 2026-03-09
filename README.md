@@ -93,8 +93,11 @@ https://vx.yourdomain.tld/mastodon.social/@user/123456789
 #### Posts/Statuses
 - `vx.yourdomain.tld/instance.tld/@username/postid` (Mastodon)
 - `vx.yourdomain.tld/instance.tld/@username/statuses/postid` (GoToSocial)
-- `vx.yourdomain.tld/instance.tld/users/username/statuses/postid` (Alternative format)
+- `vx.yourdomain.tld/instance.tld/users/username/statuses/postid` (ActivityPub)
 - `vx.yourdomain.tld/instance.tld/notice/postid` (Pleroma/Akkoma)
+- `vx.yourdomain.tld/instance.tld/objects/uuid` (Pleroma/Akkoma ActivityPub)
+- `vx.yourdomain.tld/instance.tld/notes/noteid` (Misskey/Firefish/Sharkey)
+- `vx.yourdomain.tld/instance.tld/p/username/postid` (Pixelfed)
 
 #### Profiles
 - `vx.yourdomain.tld/instance.tld/@username`
@@ -113,10 +116,13 @@ https://vx.yourdomain.tld/social.example.com/@username/statuses/01KK9CG9D9WAHQG5
 https://vx.yourdomain.tld/mas.to/@dansup
 
 # Pleroma/Akkoma post
-https://vx.yourdomain.tld/pleroma.site/@user/AaBbCcDd
+https://vx.yourdomain.tld/pleroma.site/notice/AaBbCcDd
 
 # Misskey note
-https://vx.yourdomain.tld/misskey.io/@username/9abcdef123456789
+https://vx.yourdomain.tld/misskey.io/notes/9abcdef123456789
+
+# Pixelfed post
+https://vx.yourdomain.tld/pixelfed.social/p/username/123456
 ```
 
 ## 🔧 Configuration
