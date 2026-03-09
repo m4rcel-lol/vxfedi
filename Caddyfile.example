@@ -1,0 +1,92 @@
+# vxfedi Caddy Configuration Example
+# Save to /etc/caddy/Caddyfile or run with: caddy run --config Caddyfile
+
+# Replace vx.yourdomain.tld with your actual domain
+vx.yourdomain.tld {
+    # Reverse proxy to vxfedi application
+    reverse_proxy localhost:3000 {
+        # Header forwarding
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Port {server_port}
+
+        # WebSocket support
+        header_up Upgrade {http.request.header.Upgrade}
+        header_up Connection {http.request.header.Connection}
+
+        # Timeouts
+        transport http {
+            dial_timeout 60s
+            response_header_timeout 60s
+            read_timeout 60s
+        }
+    }
+
+    # Security headers
+    header {
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "no-referrer-when-downgrade"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+        # Remove server header for security
+        -Server
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/vxfedi-access.log
+        format console
+    }
+
+    # Request size limit
+    request_body {
+        max_size 1MB
+    }
+
+    # Health check endpoint (disable logging)
+    handle /health {
+        reverse_proxy localhost:3000
+        log {
+            output discard
+        }
+    }
+
+    # Deny access to hidden files (files starting with .)
+    @hidden {
+        path_regexp hidden /\..+
+    }
+    handle @hidden {
+        respond 403
+    }
+
+    # Note: For rate limiting, consider:
+    # - Using caddy-ratelimit plugin (requires custom build)
+    # - Implementing rate limiting at application level
+    # - Using Cloudflare or similar service
+
+    # Automatic HTTPS with Let's Encrypt
+    # Caddy automatically handles:
+    # - HTTP to HTTPS redirect
+    # - TLS certificate obtaining and renewal
+    # - Modern TLS configuration (TLS 1.2, 1.3)
+    # - OCSP stapling
+
+    # Optional: Customize TLS settings
+    # tls {
+    #     protocols tls1.2 tls1.3
+    #     ciphers TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    # }
+
+    # Optional: Custom email for Let's Encrypt
+    # tls your-email@example.com
+}
+
+# Optional: Redirect www subdomain to non-www
+www.vx.yourdomain.tld {
+    redir https://vx.yourdomain.tld{uri} permanent
+}

@@ -142,9 +142,120 @@ pm2 restart vxfedi  # or restart your process
 
 vxfedi should run behind a reverse proxy for SSL/TLS termination and security.
 
+### Caddy (Recommended)
+
+Caddy is the recommended reverse proxy for vxfedi due to its automatic HTTPS support, simple configuration, and modern defaults.
+
+**Installation:**
+
+```bash
+# Debian/Ubuntu
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update
+sudo apt install caddy
+
+# Or using Docker
+docker pull caddy:latest
+```
+
+**Configuration:**
+
+Create `/etc/caddy/Caddyfile` (or use the included `Caddyfile.example`):
+
+```caddy
+vx.yourdomain.tld {
+    # Reverse proxy to vxfedi application
+    reverse_proxy localhost:3000 {
+        # Header forwarding
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Port {server_port}
+
+        # WebSocket support
+        header_up Upgrade {http.request.header.Upgrade}
+        header_up Connection {http.request.header.Connection}
+
+        # Timeouts
+        transport http {
+            dial_timeout 60s
+            response_header_timeout 60s
+            read_timeout 60s
+        }
+    }
+
+    # Security headers
+    header {
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "no-referrer-when-downgrade"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        -Server
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/vxfedi-access.log
+        format console
+    }
+
+    # Request size limit
+    request_body {
+        max_size 1MB
+    }
+
+    # Health check endpoint
+    handle /health {
+        reverse_proxy localhost:3000
+        log {
+            output discard
+        }
+    }
+
+    # Deny access to hidden files (files starting with .)
+    @hidden {
+        path_regexp hidden /\..+
+    }
+    handle @hidden {
+        respond 403
+    }
+}
+```
+
+**Start Caddy:**
+
+```bash
+# Using systemd (recommended)
+sudo systemctl enable caddy
+sudo systemctl start caddy
+sudo systemctl status caddy
+
+# Or run directly
+caddy run --config /etc/caddy/Caddyfile
+
+# Validate configuration
+caddy validate --config /etc/caddy/Caddyfile
+
+# Reload after configuration changes
+sudo systemctl reload caddy
+```
+
+**Key Benefits:**
+- ✅ Automatic HTTPS with Let's Encrypt (no manual certificate setup!)
+- ✅ Automatic certificate renewal
+- ✅ HTTP to HTTPS redirect (automatic)
+- ✅ Modern TLS configuration by default
+- ✅ Simple, readable configuration
+- ✅ Built-in rate limiting and security features
+
 ### Nginx
 
-Create `/etc/nginx/sites-available/vxfedi`:
+If you prefer Nginx, create `/etc/nginx/sites-available/vxfedi`:
 
 ```nginx
 server {
@@ -198,25 +309,10 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-### Caddy
-
-Create a Caddyfile:
-
-```caddy
-vx.yourdomain.tld {
-    reverse_proxy localhost:3000
-
-    header {
-        X-Frame-Options "SAMEORIGIN"
-        X-Content-Type-Options "nosniff"
-        X-XSS-Protection "1; mode=block"
-    }
-}
-```
-
-Start Caddy:
+**Setup SSL with Certbot:**
 ```bash
-caddy run --config Caddyfile
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d vx.yourdomain.tld
 ```
 
 ### Apache
@@ -293,6 +389,22 @@ CACHE_MAX_AGE=7200
 
 ## SSL/TLS Setup with Let's Encrypt
 
+### Using Caddy (Recommended - Automatic HTTPS)
+
+Caddy automatically obtains and renews SSL certificates - **no extra configuration needed!** Just ensure:
+
+1. Your domain points to your server
+2. Ports 80 and 443 are open
+3. Caddy is running with your domain configured
+
+Caddy will automatically:
+- Request Let's Encrypt certificates on first run
+- Renew certificates before expiry
+- Redirect HTTP to HTTPS
+- Configure modern TLS settings
+
+That's it! No manual certificate management required.
+
 ### Using Certbot (for Nginx/Apache)
 
 ```bash
@@ -307,10 +419,6 @@ sudo certbot --nginx -d vx.yourdomain.tld
 # Test renewal with:
 sudo certbot renew --dry-run
 ```
-
-### Using Caddy (automatic HTTPS)
-
-Caddy automatically obtains and renews SSL certificates - no extra configuration needed!
 
 ## Monitoring and Maintenance
 
@@ -454,7 +562,16 @@ volumes:
 
 Add rate limiting in your reverse proxy to prevent abuse.
 
-Nginx example:
+**Caddy approach:**
+
+Rate limiting in standard Caddy requires a plugin. You can use:
+1. The `caddy-ratelimit` plugin ([mholt/caddy-ratelimit](https://github.com/mholt/caddy-ratelimit))
+2. Application-level rate limiting in your Node.js code
+3. Use a dedicated service like Cloudflare for rate limiting
+
+If using application-level rate limiting, consider the `express-rate-limit` package.
+
+**Nginx with built-in rate limiting:**
 ```nginx
 limit_req_zone $binary_remote_addr zone=vxfedi:10m rate=10r/s;
 
