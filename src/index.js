@@ -52,9 +52,13 @@ app.get('/', (req, res) => {
 
       <h2>Supported Formats</h2>
       <ul>
-        <li>Posts: <code>${BASE_URL}/instance.tld/@username/postid</code></li>
-        <li>Profiles: <code>${BASE_URL}/instance.tld/@username</code></li>
-        <li>Alternative: <code>${BASE_URL}/instance.tld/users/username</code></li>
+        <li><strong>Mastodon:</strong> <code>${BASE_URL}/instance.tld/@username/postid</code></li>
+        <li><strong>GoToSocial:</strong> <code>${BASE_URL}/instance.tld/@username/statuses/postid</code></li>
+        <li><strong>Misskey/Firefish:</strong> <code>${BASE_URL}/instance.tld/notes/noteid</code></li>
+        <li><strong>Pleroma/Akkoma:</strong> <code>${BASE_URL}/instance.tld/notice/postid</code></li>
+        <li><strong>Pixelfed:</strong> <code>${BASE_URL}/instance.tld/p/username/postid</code></li>
+        <li><strong>Profiles:</strong> <code>${BASE_URL}/instance.tld/@username</code></li>
+        <li><strong>ActivityPub:</strong> <code>${BASE_URL}/instance.tld/users/username/statuses/postid</code></li>
       </ul>
 
       <h2>Features</h2>
@@ -152,7 +156,14 @@ app.get('/*', async (req, res) => {
         </head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 100px auto; padding: 20px; text-align: center;">
           <h1>⚠️ Invalid URL Format</h1>
-          <p>Please use the format: <code>${BASE_URL}/instance.tld/@username/postid</code></p>
+          <p>Supported formats:</p>
+          <ul style="text-align: left; display: inline-block;">
+            <li><strong>Mastodon:</strong> <code>${BASE_URL}/instance.tld/@username/postid</code></li>
+            <li><strong>GoToSocial:</strong> <code>${BASE_URL}/instance.tld/@username/statuses/postid</code></li>
+            <li><strong>Misskey/Firefish:</strong> <code>${BASE_URL}/instance.tld/notes/noteid</code></li>
+            <li><strong>Pleroma/Akkoma:</strong> <code>${BASE_URL}/instance.tld/notice/postid</code></li>
+            <li><strong>Pixelfed:</strong> <code>${BASE_URL}/instance.tld/p/username/postid</code></li>
+          </ul>
           <p><a href="${BASE_URL}">Go to homepage</a></p>
         </body>
         </html>
