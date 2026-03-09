@@ -91,9 +91,10 @@ https://vx.yourdomain.tld/mastodon.social/@user/123456789
 ### Supported URL Formats
 
 #### Posts/Statuses
-- `vx.yourdomain.tld/instance.tld/@username/postid`
-- `vx.yourdomain.tld/instance.tld/users/username/statuses/postid`
-- `vx.yourdomain.tld/instance.tld/notice/postid`
+- `vx.yourdomain.tld/instance.tld/@username/postid` (Mastodon)
+- `vx.yourdomain.tld/instance.tld/@username/statuses/postid` (GoToSocial)
+- `vx.yourdomain.tld/instance.tld/users/username/statuses/postid` (Alternative format)
+- `vx.yourdomain.tld/instance.tld/notice/postid` (Pleroma/Akkoma)
 
 #### Profiles
 - `vx.yourdomain.tld/instance.tld/@username`
@@ -104,6 +105,9 @@ https://vx.yourdomain.tld/mastodon.social/@user/123456789
 ```bash
 # Mastodon post
 https://vx.yourdomain.tld/mastodon.social/@Gargron/109337134326486043
+
+# GoToSocial post
+https://vx.yourdomain.tld/social.example.com/@username/statuses/01KK9CG9D9WAHQG5R5FXNR90YD
 
 # User profile
 https://vx.yourdomain.tld/mas.to/@dansup
