@@ -7,7 +7,9 @@ const {
   truncateText,
   parseMediaAttachments,
   parseActivityPubMedia,
-  parseMisskeyMedia
+  parseMisskeyMedia,
+  getFirstMediaAltText,
+  extractUsernameFromActorUrl
 } = require('../src/utils/fediverseApi');
 
 describe('parsePostData', () => {
@@ -94,7 +96,7 @@ describe('parsePostData', () => {
     });
   });
 
-  describe('Misskey/Firefish API format', () => {
+  describe('Misskey/Firefish/Sharkey/Calckey API format', () => {
     it('should parse Misskey note', () => {
       const data = {
         id: 'abc123xyz',
@@ -169,10 +171,29 @@ describe('parsePostData', () => {
       assert.strictEqual(result.mediaAttachments[0].type, 'image');
       assert.strictEqual(result.mediaAttachments[0].description, 'A nice image');
     });
+
+    it('should use media alt text as description for media-only note with null text', () => {
+      const data = {
+        id: 'imgonly',
+        text: null,
+        user: { name: 'Artist', username: 'artist' },
+        createdAt: '2024-01-01T00:00:00.000Z',
+        repliesCount: 0,
+        renoteCount: 0,
+        reactions: {},
+        files: [
+          { type: 'image/jpeg', url: 'https://misskey.io/art.jpg', thumbnailUrl: 'https://misskey.io/art_thumb.jpg', comment: 'My latest artwork' }
+        ],
+        cw: null
+      };
+
+      const result = parsePostData(data, 'misskey.io', 'imgonly');
+      assert.strictEqual(result.description, 'My latest artwork');
+    });
   });
 
   describe('ActivityPub format', () => {
-    it('should parse ActivityPub Note', () => {
+    it('should parse ActivityPub Note with embedded actor object', () => {
       const data = {
         '@context': 'https://www.w3.org/ns/activitystreams',
         type: 'Note',
@@ -193,6 +214,36 @@ describe('parsePostData', () => {
       assert.strictEqual(result.author, 'Test Author');
     });
 
+    it('should extract author username from attributedTo URL string (Pleroma/Akkoma objects path)', () => {
+      const data = {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        type: 'Note',
+        id: 'https://pleroma.example.com/objects/abc-def-123',
+        content: '<p>Pleroma note via ActivityPub</p>',
+        attributedTo: 'https://pleroma.example.com/users/pleromauser',
+        published: '2024-01-01T00:00:00.000Z',
+        attachment: []
+      };
+
+      const result = parsePostData(data, 'pleroma.example.com', 'abc-def-123');
+      assert.strictEqual(result.author, 'pleromauser');
+      assert.strictEqual(result.authorUrl, 'https://pleroma.example.com/users/pleromauser');
+    });
+
+    it('should extract author from @username URL format in attributedTo', () => {
+      const data = {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        type: 'Note',
+        id: 'https://example.com/notes/789',
+        content: 'Hello ActivityPub!',
+        attributedTo: 'https://example.com/@someuser',
+        published: '2024-01-01T00:00:00.000Z',
+      };
+
+      const result = parsePostData(data, 'example.com', '789');
+      assert.strictEqual(result.author, 'someuser');
+    });
+
     it('should parse ActivityPub Article', () => {
       const data = {
         type: 'Article',
@@ -205,6 +256,112 @@ describe('parsePostData', () => {
       const result = parsePostData(data, 'example.com', '789');
       assert.strictEqual(result.type, 'post');
       assert.strictEqual(result.content, 'Article content');
+    });
+
+    it('should use media alt text as description when content is empty', () => {
+      const data = {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        type: 'Note',
+        id: 'https://example.com/notes/noctxt',
+        content: '',
+        attributedTo: 'https://example.com/users/alice',
+        published: '2024-01-01T00:00:00.000Z',
+        attachment: [
+          { mediaType: 'image/png', url: 'https://example.com/photo.png', name: 'A scenic mountain view' }
+        ]
+      };
+
+      const result = parsePostData(data, 'example.com', 'noctxt');
+      assert.strictEqual(result.description, 'A scenic mountain view');
+    });
+  });
+
+  describe('Pixelfed format (Mastodon-compatible API)', () => {
+    it('should parse Pixelfed photo post with caption', () => {
+      const data = {
+        id: '123456789',
+        url: 'https://pixelfed.social/p/photouser/123456789',
+        content: '<p>Beautiful sunset!</p>',
+        account: {
+          display_name: 'Photo User',
+          username: 'photouser',
+          acct: 'photouser',
+          url: 'https://pixelfed.social/@photouser',
+          avatar: 'https://pixelfed.social/avatar.png'
+        },
+        created_at: '2024-06-01T12:00:00.000Z',
+        replies_count: 2,
+        reblogs_count: 5,
+        favourites_count: 20,
+        media_attachments: [
+          { type: 'image', url: 'https://pixelfed.social/photo.jpg', preview_url: 'https://pixelfed.social/thumb.jpg', description: 'Sunset over the ocean' }
+        ],
+        sensitive: false,
+        spoiler_text: ''
+      };
+
+      const result = parsePostData(data, 'pixelfed.social', '123456789');
+      assert.strictEqual(result.type, 'post');
+      assert.strictEqual(result.content, 'Beautiful sunset!');
+      assert.strictEqual(result.description, 'Beautiful sunset!');
+      assert.strictEqual(result.mediaAttachments.length, 1);
+      assert.strictEqual(result.mediaAttachments[0].type, 'image');
+    });
+
+    it('should use media alt text as description for photo-only Pixelfed post', () => {
+      const data = {
+        id: '987654321',
+        url: 'https://pixelfed.social/p/photouser/987654321',
+        content: '',
+        account: {
+          display_name: 'Photo User',
+          username: 'photouser',
+          acct: 'photouser',
+          url: 'https://pixelfed.social/@photouser'
+        },
+        created_at: '2024-06-01T12:00:00.000Z',
+        replies_count: 0,
+        reblogs_count: 0,
+        favourites_count: 10,
+        media_attachments: [
+          { type: 'image', url: 'https://pixelfed.social/photo.jpg', preview_url: 'https://pixelfed.social/thumb.jpg', description: 'A beautiful mountain landscape' }
+        ],
+        sensitive: false,
+        spoiler_text: ''
+      };
+
+      const result = parsePostData(data, 'pixelfed.social', '987654321');
+      assert.strictEqual(result.description, 'A beautiful mountain landscape');
+    });
+  });
+
+  describe('Pleroma/Akkoma format', () => {
+    it('should parse Pleroma post via Mastodon-compatible API', () => {
+      const data = {
+        id: 'AaBbCcDd12',
+        url: 'https://pleroma.example.com/notice/AaBbCcDd12',
+        content: '<p>Pleroma post content</p>',
+        account: {
+          display_name: 'Pleroma User',
+          username: 'pleromauser',
+          acct: 'pleromauser',
+          url: 'https://pleroma.example.com/@pleromauser',
+          avatar: 'https://pleroma.example.com/avatar.png'
+        },
+        created_at: '2024-01-01T00:00:00.000Z',
+        replies_count: 1,
+        reblogs_count: 3,
+        favourites_count: 7,
+        media_attachments: [],
+        sensitive: false,
+        spoiler_text: ''
+      };
+
+      const result = parsePostData(data, 'pleroma.example.com', 'AaBbCcDd12');
+      assert.strictEqual(result.type, 'post');
+      assert.strictEqual(result.content, 'Pleroma post content');
+      assert.strictEqual(result.author, 'Pleroma User');
+      assert.strictEqual(result.instance, 'pleroma.example.com');
     });
   });
 
@@ -245,7 +402,7 @@ describe('parseProfileData', () => {
     });
   });
 
-  describe('Misskey/Firefish API format', () => {
+  describe('Misskey/Firefish/Sharkey/Calckey API format', () => {
     it('should parse Misskey profile', () => {
       const data = {
         id: 'mk12345',
@@ -464,5 +621,52 @@ describe('parseMisskeyMedia', () => {
   it('should handle null/empty input', () => {
     assert.deepStrictEqual(parseMisskeyMedia(null), []);
     assert.deepStrictEqual(parseMisskeyMedia([]), []);
+  });
+});
+
+describe('getFirstMediaAltText', () => {
+  it('should return the description of the first attachment', () => {
+    const attachments = [
+      { type: 'image', url: 'https://example.com/a.png', description: 'First image alt' },
+      { type: 'image', url: 'https://example.com/b.png', description: 'Second image alt' }
+    ];
+    assert.strictEqual(getFirstMediaAltText(attachments), 'First image alt');
+  });
+
+  it('should return empty string when attachments array is empty', () => {
+    assert.strictEqual(getFirstMediaAltText([]), '');
+  });
+
+  it('should return empty string when description is missing', () => {
+    assert.strictEqual(getFirstMediaAltText([{ type: 'image', url: 'https://example.com/a.png' }]), '');
+  });
+
+  it('should return empty string for null/undefined input', () => {
+    assert.strictEqual(getFirstMediaAltText(null), '');
+    assert.strictEqual(getFirstMediaAltText(undefined), '');
+  });
+});
+
+describe('extractUsernameFromActorUrl', () => {
+  it('should extract username from /users/username URL', () => {
+    assert.strictEqual(extractUsernameFromActorUrl('https://mastodon.social/users/alice'), 'alice');
+  });
+
+  it('should extract username from /@username URL', () => {
+    assert.strictEqual(extractUsernameFromActorUrl('https://mastodon.social/@bob'), 'bob');
+  });
+
+  it('should handle Pleroma-style /users/username URL', () => {
+    assert.strictEqual(extractUsernameFromActorUrl('https://pleroma.example.com/users/pleromauser'), 'pleromauser');
+  });
+
+  it('should return null for URLs that do not match expected patterns', () => {
+    assert.strictEqual(extractUsernameFromActorUrl('https://example.com/some/other/path'), null);
+  });
+
+  it('should return null for null/undefined/non-string input', () => {
+    assert.strictEqual(extractUsernameFromActorUrl(null), null);
+    assert.strictEqual(extractUsernameFromActorUrl(undefined), null);
+    assert.strictEqual(extractUsernameFromActorUrl({}), null);
   });
 });

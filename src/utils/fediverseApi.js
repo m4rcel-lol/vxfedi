@@ -138,16 +138,36 @@ async function fetchProfile(instance, username) {
 }
 
 /**
+ * Get the alt text of the first media attachment, used as description fallback
+ * for media-only posts (e.g. Pixelfed photo-only posts, Misskey image notes)
+ */
+function getFirstMediaAltText(mediaAttachments) {
+  return (mediaAttachments && mediaAttachments.length > 0) ? (mediaAttachments[0].description || '') : '';
+}
+
+/**
+ * Extract a username from an ActivityPub actor URL string.
+ * Handles both /users/username and /@username URL patterns.
+ */
+function extractUsernameFromActorUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  const match = url.match(/\/users\/([^/]+)$/) || url.match(/\/@([^/]+)$/);
+  return match ? match[1] : null;
+}
+
+/**
  * Parse post data from various formats (Mastodon API, ActivityPub, Misskey)
  */
 function parsePostData(data, instance, postId) {
-  // Mastodon/GoToSocial/Pleroma API format (has content and account fields)
+  // Mastodon/GoToSocial/Pleroma/Akkoma/Pixelfed API format (has content and account fields)
   if (data.content !== undefined && data.account !== undefined) {
+    const mediaAttachments = parseMediaAttachments(data.media_attachments);
+    const strippedContent = stripHtml(data.content);
     return {
       type: 'post',
       id: data.id || postId,
       url: data.url || data.uri,
-      content: stripHtml(data.content),
+      content: strippedContent,
       contentHtml: data.content,
       author: data.account?.display_name || data.account?.username || 'Unknown',
       authorUsername: data.account?.acct || data.account?.username,
@@ -157,19 +177,20 @@ function parsePostData(data, instance, postId) {
       repliesCount: data.replies_count || 0,
       reblogsCount: data.reblogs_count || 0,
       favouritesCount: data.favourites_count || 0,
-      mediaAttachments: parseMediaAttachments(data.media_attachments),
+      mediaAttachments,
       sensitive: data.sensitive || false,
       spoilerText: data.spoiler_text || '',
       instance: instance,
       title: generatePostTitle(data),
-      description: truncateText(stripHtml(data.content), 200)
+      description: truncateText(strippedContent, 200) || getFirstMediaAltText(mediaAttachments)
     };
   }
 
-  // Misskey/Firefish/Sharkey API format (has text and user fields)
+  // Misskey/Firefish/Sharkey/Calckey/IceShrimp API format (has text and user fields)
   if (data.text !== undefined && data.user !== undefined) {
     const content = data.text || '';
     const author = data.user?.name || data.user?.username || 'Unknown';
+    const mediaAttachments = parseMisskeyMedia(data.files);
     return {
       type: 'post',
       id: data.id || postId,
@@ -184,32 +205,40 @@ function parsePostData(data, instance, postId) {
       repliesCount: data.repliesCount || 0,
       reblogsCount: data.renoteCount || 0,
       favouritesCount: data.reactions ? Object.values(data.reactions).reduce((a, b) => a + b, 0) : 0,
-      mediaAttachments: parseMisskeyMedia(data.files),
+      mediaAttachments,
       sensitive: data.cw != null,
       spoilerText: data.cw || '',
       instance: instance,
       title: `${author} on ${instance}: "${truncateText(content, 60) || 'Post'}"`,
-      description: truncateText(content, 200)
+      description: truncateText(content, 200) || getFirstMediaAltText(mediaAttachments)
     };
   }
 
   // ActivityPub format
   if (data['@context'] || data.type === 'Note' || data.type === 'Article') {
     const content = data.content || data.summary || '';
+    const strippedContent = stripHtml(content);
+    const actorRef = data.attributedTo || data.actor;
+    const actorUrl = typeof actorRef === 'string' ? actorRef : (actorRef?.id || null);
+    const actorName = typeof actorRef === 'object'
+      ? (actorRef?.name || actorRef?.preferredUsername || null)
+      : null;
+    const author = actorName || extractUsernameFromActorUrl(actorUrl) || 'Unknown';
+    const mediaAttachments = parseActivityPubMedia(data.attachment);
     return {
       type: 'post',
       id: postId,
       url: data.id || data.url,
-      content: stripHtml(content),
+      content: strippedContent,
       contentHtml: content,
-      author: data.attributedTo?.name || data.actor?.name || 'Unknown',
-      authorUrl: data.attributedTo?.id || data.attributedTo || data.actor?.id || data.actor,
+      author,
+      authorUrl: actorUrl,
       createdAt: data.published,
-      mediaAttachments: parseActivityPubMedia(data.attachment),
+      mediaAttachments,
       sensitive: data.sensitive || false,
       instance: instance,
-      title: generatePostTitle({ content: stripHtml(content), account: { display_name: data.attributedTo?.name } }),
-      description: truncateText(stripHtml(content), 200)
+      title: generatePostTitle({ content: strippedContent, account: { display_name: author } }),
+      description: truncateText(strippedContent, 200) || getFirstMediaAltText(mediaAttachments)
     };
   }
 
@@ -397,5 +426,7 @@ module.exports = {
   truncateText,
   parseMediaAttachments,
   parseActivityPubMedia,
-  parseMisskeyMedia
+  parseMisskeyMedia,
+  getFirstMediaAltText,
+  extractUsernameFromActorUrl
 };
