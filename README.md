@@ -48,7 +48,7 @@
    npm run dev
    ```
 
-5. **Visit** `http://localhost:3000`
+5. **Visit** `http://localhost:41530`
 
 ### Docker Deployment
 
@@ -154,9 +154,9 @@ Edit `.env` file or set environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `3000` | Server port |
+| `PORT` | `41530` | Server port |
 | `NODE_ENV` | `production` | Environment (development/production) |
-| `BASE_URL` | `http://localhost:3000` | Your vxfedi instance URL |
+| `BASE_URL` | `http://localhost:41530` | Your vxfedi instance URL |
 | `USER_AGENT` | `vxfedi/1.0` | User agent for API requests |
 | `REQUEST_TIMEOUT` | `10000` | API request timeout (ms) |
 | `CACHE_MAX_AGE` | `3600` | Cache duration (seconds) |

@@ -72,7 +72,7 @@ Enhancement suggestions are welcome! Please:
    ```
 
 5. **Test your changes**
-   - Manual testing: Visit `http://localhost:3000`
+   - Manual testing: Visit `http://localhost:41530`
    - Test with different Fediverse URLs
    - Test with different user agents (bot vs browser)
 
@@ -141,11 +141,11 @@ Before submitting a PR, test the following:
 ```bash
 # Test as Discord bot
 curl -A "Mozilla/5.0 (compatible; Discordbot/2.0)" \
-  http://localhost:3000/mastodon.social/@user/123
+  http://localhost:41530/mastodon.social/@user/123
 
 # Test as regular browser
 curl -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0" \
-  http://localhost:3000/mastodon.social/@user/123
+  http://localhost:41530/mastodon.social/@user/123
 ```
 
 ### Testing with Real Fediverse Content

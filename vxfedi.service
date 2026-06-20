@@ -9,7 +9,7 @@ User=vxfedi
 Group=vxfedi
 WorkingDirectory=/opt/vxfedi
 Environment="NODE_ENV=production"
-Environment="PORT=3000"
+Environment="PORT=41530"
 EnvironmentFile=/opt/vxfedi/.env
 ExecStart=/usr/bin/node /opt/vxfedi/src/index.js
 Restart=always
