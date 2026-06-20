@@ -11,6 +11,12 @@ async function fetchFediverseContent(parsed) {
   const { instance, username, postId, resourceType, originalUrl } = parsed;
 
   try {
+    // Link-aggregator / video platforms (Lemmy, PieFed, Mbin/Kbin, PeerTube)
+    // use bespoke APIs and are routed via the `platform`/`subtype` hints.
+    if (parsed.platform) {
+      return await fetchPlatformContent(parsed);
+    }
+
     if (resourceType === 'post') {
       return await fetchPost(instance, username, postId);
     } else if (resourceType === 'profile') {
@@ -386,6 +392,526 @@ function truncateText(text, maxLength) {
   return text.substring(0, maxLength).trim() + '...';
 }
 
+/* ------------------------------------------------------------------ *
+ *  Link-aggregator & video platforms                                 *
+ *  Lemmy / PieFed (Threadiverse), Mbin / Kbin, PeerTube              *
+ * ------------------------------------------------------------------ */
+
+/**
+ * Simple JSON GET helper used by the platform-specific fetchers.
+ * Returns the parsed body, or null on any error / non-2xx response.
+ */
+async function getJson(url) {
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept': 'application/json'
+      },
+      timeout: REQUEST_TIMEOUT,
+      maxRedirects: 5,
+      validateStatus: (status) => status >= 200 && status < 300
+    });
+    return response.data || null;
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Dispatch a `platform`-tagged URL to the right API(s).
+ *
+ * Some URL shapes are shared between platforms (e.g. `/c/x` is a Lemmy
+ * community AND a PeerTube channel, `/u/x` is a Lemmy/Mbin user), so each
+ * resource maps to an ordered list of candidate fetchers and the first one
+ * that returns data wins.
+ */
+async function fetchPlatformContent(parsed) {
+  const { instance, username, postId, resourceType, subtype } = parsed;
+  const attempts = [];
+
+  if (resourceType === 'post') {
+    if (subtype === 'comment') {
+      attempts.push(() => fetchLemmyComment(instance, postId));
+    } else if (subtype === 'thread') {
+      attempts.push(() => fetchMbinEntry(instance, postId));
+    } else if (subtype === 'video') {
+      attempts.push(() => fetchPeertubeVideo(instance, postId));
+    } else {
+      attempts.push(() => fetchLemmyPost(instance, postId));
+    }
+  } else if (resourceType === 'profile') {
+    if (subtype === 'community') {
+      attempts.push(() => fetchLemmyCommunity(instance, username));
+      attempts.push(() => fetchPeertubeActor(instance, username, 'channel'));
+    } else if (subtype === 'user') {
+      attempts.push(() => fetchLemmyUser(instance, username));
+      attempts.push(() => fetchMbinUser(instance, username));
+      attempts.push(() => fetchPeertubeActor(instance, username, 'account'));
+    } else if (subtype === 'magazine') {
+      attempts.push(() => fetchMbinMagazine(instance, username));
+      attempts.push(() => fetchLemmyCommunity(instance, username));
+    } else if (subtype === 'channel') {
+      attempts.push(() => fetchPeertubeActor(instance, username, 'channel'));
+    } else if (subtype === 'account') {
+      attempts.push(() => fetchPeertubeActor(instance, username, 'account'));
+      attempts.push(() => fetchMbinUser(instance, username));
+      attempts.push(() => fetchLemmyUser(instance, username));
+    }
+  }
+
+  for (const attempt of attempts) {
+    try {
+      const result = await attempt();
+      if (result) return result;
+    } catch (error) {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+/* ----------------------------- Lemmy / PieFed ----------------------------- */
+
+async function fetchLemmyPost(instance, id) {
+  let data = await getJson(`https://${instance}/api/v3/post?id=${id}`);
+  let view = data && data.post_view;
+  if (!view) {
+    // PieFed exposes a Lemmy-compatible API under /api/alpha
+    data = await getJson(`https://${instance}/api/alpha/post?id=${id}`);
+    view = data && data.post_view;
+  }
+  return view ? parseLemmyPost(view, instance) : null;
+}
+
+async function fetchLemmyComment(instance, id) {
+  let data = await getJson(`https://${instance}/api/v3/comment?id=${id}`);
+  let view = data && data.comment_view;
+  if (!view) {
+    data = await getJson(`https://${instance}/api/alpha/comment?id=${id}`);
+    view = data && data.comment_view;
+  }
+  return view ? parseLemmyComment(view, instance) : null;
+}
+
+async function fetchLemmyCommunity(instance, name) {
+  const q = encodeURIComponent(name);
+  let data = await getJson(`https://${instance}/api/v3/community?name=${q}`);
+  let view = data && data.community_view;
+  if (!view) {
+    data = await getJson(`https://${instance}/api/alpha/community?name=${q}`);
+    view = data && data.community_view;
+  }
+  return view ? parseLemmyCommunity(view, instance) : null;
+}
+
+async function fetchLemmyUser(instance, name) {
+  const q = encodeURIComponent(name);
+  let data = await getJson(`https://${instance}/api/v3/user?username=${q}`);
+  let view = data && data.person_view;
+  if (!view) {
+    data = await getJson(`https://${instance}/api/alpha/user?username=${q}`);
+    view = data && data.person_view;
+  }
+  return view ? parseLemmyUser(view, instance) : null;
+}
+
+function parseLemmyPost(view, instance) {
+  const post = view.post || {};
+  const creator = view.creator || {};
+  const community = view.community || {};
+  const counts = view.counts || {};
+  const body = stripMarkdown(post.body || '');
+  const thumb = post.thumbnail_url || null;
+  const author = creator.display_name || creator.name || 'Unknown';
+  const communityName = community.title || community.name || instance;
+
+  const mediaAttachments = thumb
+    ? [{ type: 'image', url: thumb, previewUrl: thumb, description: post.name || '' }]
+    : [];
+
+  return {
+    type: 'post',
+    id: post.id,
+    url: post.ap_id || `https://${instance}/post/${post.id}`,
+    content: body,
+    contentHtml: body,
+    author,
+    authorUsername: creator.name,
+    authorUrl: creator.actor_id,
+    authorAvatar: creator.avatar,
+    createdAt: post.published,
+    repliesCount: counts.comments || 0,
+    reblogsCount: 0,
+    favouritesCount: counts.score || counts.upvotes || 0,
+    mediaAttachments,
+    sensitive: post.nsfw || false,
+    spoilerText: '',
+    instance,
+    title: post.name || `Post by ${author} in ${communityName}`,
+    description: truncateText(
+      body || post.embed_description || post.url || `Posted in ${communityName} on ${instance}`,
+      200
+    ),
+    thumbnail: thumb || creator.avatar
+  };
+}
+
+function parseLemmyComment(view, instance) {
+  const comment = view.comment || {};
+  const creator = view.creator || {};
+  const post = view.post || {};
+  const counts = view.counts || {};
+  const text = stripMarkdown(comment.content || '');
+  const author = creator.display_name || creator.name || 'Unknown';
+
+  return {
+    type: 'post',
+    id: comment.id,
+    url: comment.ap_id || `https://${instance}/comment/${comment.id}`,
+    content: text,
+    contentHtml: text,
+    author,
+    authorUsername: creator.name,
+    authorUrl: creator.actor_id,
+    authorAvatar: creator.avatar,
+    createdAt: comment.published,
+    repliesCount: counts.child_count || 0,
+    reblogsCount: 0,
+    favouritesCount: counts.score || counts.upvotes || 0,
+    mediaAttachments: [],
+    sensitive: false,
+    spoilerText: '',
+    instance,
+    title: `${author} commented on "${truncateText(post.name || 'a post', 60)}"`,
+    description: truncateText(text, 200) || `A comment on ${instance}`,
+    thumbnail: creator.avatar
+  };
+}
+
+function parseLemmyCommunity(view, instance) {
+  const community = view.community || {};
+  const counts = view.counts || {};
+  const note = stripMarkdown(community.description || '');
+
+  return {
+    type: 'profile',
+    id: community.id,
+    username: community.name,
+    displayName: community.title || community.name,
+    acct: community.name,
+    url: community.actor_id || `https://${instance}/c/${community.name}`,
+    avatar: community.icon,
+    header: community.banner,
+    note,
+    noteHtml: community.description,
+    followersCount: counts.subscribers || 0,
+    followingCount: 0,
+    statusesCount: counts.posts || 0,
+    bot: false,
+    locked: community.posting_restricted_to_mods || false,
+    createdAt: community.published,
+    instance,
+    title: `${community.title || community.name} — Community on ${instance}`,
+    description: truncateText(note, 200) || `A community on ${instance} (Lemmy)`,
+    thumbnail: community.icon || community.banner
+  };
+}
+
+function parseLemmyUser(view, instance) {
+  const person = view.person || {};
+  const counts = view.counts || {};
+  const note = stripMarkdown(person.bio || '');
+  const displayName = person.display_name || person.name;
+
+  return {
+    type: 'profile',
+    id: person.id,
+    username: person.name,
+    displayName,
+    acct: person.name,
+    url: person.actor_id || `https://${instance}/u/${person.name}`,
+    avatar: person.avatar,
+    header: person.banner,
+    note,
+    noteHtml: person.bio,
+    followersCount: 0,
+    followingCount: 0,
+    statusesCount: (counts.post_count || 0) + (counts.comment_count || 0),
+    bot: person.bot_account || false,
+    locked: false,
+    createdAt: person.published,
+    instance,
+    title: `${displayName} (@${person.name}@${instance}) — Fediverse Profile`,
+    description: truncateText(note, 200) || `Follow ${displayName} on ${instance} (Lemmy)`,
+    thumbnail: person.avatar || person.banner
+  };
+}
+
+/* -------------------------------- PeerTube -------------------------------- */
+
+async function fetchPeertubeVideo(instance, id) {
+  const data = await getJson(`https://${instance}/api/v1/videos/${encodeURIComponent(id)}`);
+  if (data && data.name && (data.account || data.channel)) {
+    return parsePeertubeVideo(data, instance);
+  }
+  return null;
+}
+
+async function fetchPeertubeActor(instance, handle, kind) {
+  const primary = kind === 'channel' ? 'video-channels' : 'accounts';
+  const secondary = kind === 'channel' ? 'accounts' : 'video-channels';
+  const q = encodeURIComponent(handle);
+
+  let data = await getJson(`https://${instance}/api/v1/${primary}/${q}`);
+  if (!(data && (data.name || data.displayName))) {
+    data = await getJson(`https://${instance}/api/v1/${secondary}/${q}`);
+  }
+  return (data && (data.name || data.displayName)) ? parsePeertubeActor(data, instance, kind) : null;
+}
+
+/**
+ * Resolve a usable avatar/banner URL from a PeerTube actor image array.
+ * Each entry has either an absolute `fileUrl` or an instance-relative `path`.
+ */
+function peertubeImage(images, base) {
+  const list = Array.isArray(images) ? images : (images ? [images] : []);
+  if (!list.length) return null;
+  // Prefer a small-to-medium size for previews, otherwise take the first.
+  const pick = list.find((img) => img.width && img.width <= 150) || list[list.length - 1];
+  return pick.fileUrl || (pick.path ? `${base}${pick.path}` : null);
+}
+
+function parsePeertubeVideo(data, instance) {
+  const base = `https://${instance}`;
+  const account = data.account || {};
+  const channel = data.channel || {};
+  const thumb = data.previewPath
+    ? `${base}${data.previewPath}`
+    : (data.thumbnailPath ? `${base}${data.thumbnailPath}` : null);
+  const embed = data.embedPath ? `${base}${data.embedPath}` : null;
+  const avatar = peertubeImage(account.avatars || account.avatar, base);
+  const channelName = channel.displayName || account.displayName || account.name || 'PeerTube';
+
+  const mediaAttachments = [];
+  if (embed) {
+    mediaAttachments.push({
+      type: 'video',
+      url: embed,
+      previewUrl: thumb || avatar,
+      description: data.name || '',
+      isEmbed: true,
+      width: 1280,
+      height: 720
+    });
+  } else if (thumb) {
+    mediaAttachments.push({ type: 'image', url: thumb, previewUrl: thumb, description: data.name || '' });
+  }
+
+  return {
+    type: 'post',
+    id: data.uuid || data.shortUUID,
+    url: data.url || `${base}/w/${data.shortUUID || data.uuid}`,
+    content: stripMarkdown(data.description || ''),
+    contentHtml: data.description,
+    author: account.displayName || account.name || channelName,
+    authorUsername: account.name,
+    authorUrl: account.url,
+    authorAvatar: avatar,
+    createdAt: data.publishedAt || data.createdAt,
+    repliesCount: data.comments || 0,
+    reblogsCount: data.views || 0,
+    favouritesCount: data.likes || 0,
+    mediaAttachments,
+    sensitive: data.nsfw || false,
+    spoilerText: '',
+    instance,
+    title: `${data.name} — ${channelName} on ${instance}`,
+    description: truncateText(stripMarkdown(data.description || '') || `Video on ${instance} (PeerTube)`, 200),
+    thumbnail: thumb || avatar,
+    duration: data.duration
+  };
+}
+
+function parsePeertubeActor(data, instance, kind) {
+  const base = `https://${instance}`;
+  const avatar = peertubeImage(data.avatars || data.avatar, base);
+  const banner = peertubeImage(data.banners || data.banner, base);
+  const name = data.name;
+  const displayName = data.displayName || name;
+  const note = stripMarkdown(data.description || '');
+  const label = kind === 'channel' ? 'Channel' : 'Account';
+
+  return {
+    type: 'profile',
+    id: data.id,
+    username: name,
+    displayName,
+    acct: name,
+    url: data.url || `${base}/a/${name}`,
+    avatar,
+    header: banner,
+    note,
+    noteHtml: data.description,
+    followersCount: data.followersCount || 0,
+    followingCount: data.followingCount || 0,
+    statusesCount: 0,
+    bot: false,
+    locked: false,
+    createdAt: data.createdAt,
+    instance,
+    title: `${displayName} — PeerTube ${label} on ${instance}`,
+    description: truncateText(note, 200) || `${displayName} on ${instance} (PeerTube)`,
+    thumbnail: avatar || banner
+  };
+}
+
+/* ------------------------------- Mbin / Kbin ------------------------------ */
+
+async function fetchMbinEntry(instance, id) {
+  const data = await getJson(`https://${instance}/api/entry/${encodeURIComponent(id)}`);
+  return (data && data.entryId) ? parseMbinEntry(data, instance) : null;
+}
+
+async function fetchMbinMagazine(instance, name) {
+  let data = await getJson(`https://${instance}/api/magazine/name/${encodeURIComponent(name)}`);
+  if (!(data && data.name)) {
+    // Numeric-id form: /api/magazine/{id}
+    data = await getJson(`https://${instance}/api/magazine/${encodeURIComponent(name)}`);
+  }
+  return (data && data.name) ? parseMbinMagazine(data, instance) : null;
+}
+
+async function fetchMbinUser(instance, name) {
+  const data = await getJson(`https://${instance}/api/users/name/${encodeURIComponent(name)}`);
+  return (data && data.username) ? parseMbinUser(data, instance) : null;
+}
+
+/** Resolve a usable URL from an Mbin image object (or string). */
+function mbinImage(image) {
+  if (!image) return null;
+  if (typeof image === 'string') return image;
+  return image.storageUrl || image.sourceUrl || null;
+}
+
+function parseMbinEntry(data, instance) {
+  const base = `https://${instance}`;
+  const user = data.user || {};
+  const magazine = data.magazine || {};
+  const image = mbinImage(data.image);
+  const avatar = mbinImage(user.avatar);
+  const body = stripMarkdown(data.body || '');
+  const apId = typeof data.apId === 'string' && data.apId.startsWith('http') ? data.apId : null;
+
+  const mediaAttachments = image
+    ? [{ type: 'image', url: image, previewUrl: image, description: data.title || '' }]
+    : [];
+
+  return {
+    type: 'post',
+    id: data.entryId,
+    url: apId || `${base}/m/${magazine.name}/t/${data.entryId}`,
+    content: body,
+    contentHtml: body,
+    author: user.username,
+    authorUsername: user.username,
+    authorUrl: user.apProfileId || (user.username ? `${base}/u/${user.username}` : null),
+    authorAvatar: avatar,
+    createdAt: data.createdAt,
+    repliesCount: data.numComments || 0,
+    reblogsCount: 0,
+    favouritesCount: data.favourites || data.uv || 0,
+    mediaAttachments,
+    sensitive: data.isAdult || false,
+    spoilerText: '',
+    instance,
+    title: data.title || `Thread by ${user.username} on ${instance}`,
+    description: truncateText(
+      body || data.url || `Posted in ${magazine.name || instance} (Mbin)`,
+      200
+    ),
+    thumbnail: image || avatar
+  };
+}
+
+function parseMbinMagazine(data, instance) {
+  const base = `https://${instance}`;
+  const icon = mbinImage(data.icon);
+  const banner = mbinImage(data.banner);
+  const note = stripMarkdown(data.description || '');
+
+  return {
+    type: 'profile',
+    id: data.magazineId,
+    username: data.name,
+    displayName: data.title || data.name,
+    acct: data.name,
+    url: `${base}/m/${data.name}`,
+    avatar: icon,
+    header: banner,
+    note,
+    noteHtml: data.description,
+    followersCount: data.subscriptionsCount || 0,
+    followingCount: 0,
+    statusesCount: data.entryCount || 0,
+    bot: false,
+    locked: false,
+    instance,
+    title: `${data.title || data.name} — Magazine on ${instance}`,
+    description: truncateText(note, 200) || `A magazine on ${instance} (Mbin)`,
+    thumbnail: icon || banner
+  };
+}
+
+function parseMbinUser(data, instance) {
+  const base = `https://${instance}`;
+  const avatar = mbinImage(data.avatar);
+  const cover = mbinImage(data.cover);
+  const note = stripMarkdown(data.about || '');
+
+  return {
+    type: 'profile',
+    id: data.userId,
+    username: data.username,
+    displayName: data.username,
+    acct: data.username,
+    url: data.apProfileId || `${base}/u/${data.username}`,
+    avatar,
+    header: cover,
+    note,
+    noteHtml: data.about,
+    followersCount: data.followersCount || 0,
+    followingCount: 0,
+    statusesCount: 0,
+    bot: data.isBot || false,
+    locked: false,
+    createdAt: data.createdAt,
+    instance,
+    title: `${data.username} (@${data.username}@${instance}) — Fediverse Profile`,
+    description: truncateText(note, 200) || `Follow ${data.username} on ${instance} (Mbin)`,
+    thumbnail: avatar || cover
+  };
+}
+
+/**
+ * Strip a useful plain-text excerpt out of Markdown (Lemmy / Mbin bodies).
+ */
+function stripMarkdown(md) {
+  if (!md) return '';
+  return md
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')   // images -> alt text
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')     // links -> link text
+    .replace(/^\s{0,3}>+\s?/gm, '')              // blockquotes
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')          // headings
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')          // bold
+    .replace(/(\*|_)(.*?)\1/g, '$2')             // italics
+    .replace(/`{1,3}([^`]*)`{1,3}/g, '$1')       // inline / fenced code
+    .replace(/^\s{0,3}[-*+]\s+/gm, '• ')         // list bullets
+    .replace(/\r\n/g, '\n')
+    .trim();
+}
+
 module.exports = {
   fetchFediverseContent,
   fetchPost,
@@ -394,8 +920,19 @@ module.exports = {
   parsePostData,
   parseProfileData,
   stripHtml,
+  stripMarkdown,
   truncateText,
   parseMediaAttachments,
   parseActivityPubMedia,
-  parseMisskeyMedia
+  parseMisskeyMedia,
+  // Link-aggregator / video platform parsers
+  parseLemmyPost,
+  parseLemmyComment,
+  parseLemmyCommunity,
+  parseLemmyUser,
+  parsePeertubeVideo,
+  parsePeertubeActor,
+  parseMbinEntry,
+  parseMbinMagazine,
+  parseMbinUser
 };

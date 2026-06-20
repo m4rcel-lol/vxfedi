@@ -11,8 +11,14 @@ function generateMetaTags(content, baseUrl, path) {
   metaTags.push({ name: 'description', content: content.description || 'Fediverse content' });
 
   if (content.type === 'post') {
-    // Open Graph meta tags for posts
-    metaTags.push({ property: 'og:type', content: 'article' });
+    const firstMedia = (content.mediaAttachments && content.mediaAttachments.length > 0)
+      ? content.mediaAttachments[0]
+      : null;
+    const isVideo = firstMedia && (firstMedia.type === 'video' || firstMedia.type === 'gifv');
+
+    // Open Graph meta tags for posts. Video posts use the `video.*` object
+    // type so clients (Discord, Telegram, Slack) render a player/large card.
+    metaTags.push({ property: 'og:type', content: isVideo ? 'video.other' : 'article' });
     metaTags.push({ property: 'og:title', content: escapeHtml(content.title) });
     metaTags.push({ property: 'og:description', content: escapeHtml(content.description) });
     metaTags.push({ property: 'og:url', content: content.url });
@@ -41,8 +47,18 @@ function generateMetaTags(content, baseUrl, path) {
           metaTags.push({ property: 'og:image:height', content: firstMedia.meta.original.height || '630' });
         }
       } else if (firstMedia.type === 'video' || firstMedia.type === 'gifv') {
+        // Thumbnail first — this is what most chat clients actually render.
+        if (firstMedia.previewUrl) {
+          metaTags.push({ property: 'og:image', content: firstMedia.previewUrl });
+          metaTags.push({ property: 'og:image:alt', content: escapeHtml(firstMedia.description || 'Video thumbnail') });
+        }
+        // Full video player tags for clients that support inline playback.
         metaTags.push({ property: 'og:video', content: firstMedia.url });
-        metaTags.push({ property: 'og:image', content: firstMedia.previewUrl || firstMedia.url });
+        metaTags.push({ property: 'og:video:url', content: firstMedia.url });
+        metaTags.push({ property: 'og:video:secure_url', content: firstMedia.url });
+        metaTags.push({ property: 'og:video:type', content: firstMedia.isEmbed ? 'text/html' : 'video/mp4' });
+        metaTags.push({ property: 'og:video:width', content: String(firstMedia.width || 1280) });
+        metaTags.push({ property: 'og:video:height', content: String(firstMedia.height || 720) });
       }
     } else if (content.authorAvatar) {
       // Fallback to author avatar if no media

@@ -54,9 +54,12 @@ app.get('/', (req, res) => {
       <ul>
         <li><strong>Mastodon:</strong> <code>${BASE_URL}/instance.tld/@username/postid</code></li>
         <li><strong>GoToSocial:</strong> <code>${BASE_URL}/instance.tld/@username/statuses/postid</code></li>
-        <li><strong>Misskey/Firefish:</strong> <code>${BASE_URL}/instance.tld/notes/noteid</code></li>
+        <li><strong>Misskey/Firefish/Sharkey:</strong> <code>${BASE_URL}/instance.tld/notes/noteid</code></li>
         <li><strong>Pleroma/Akkoma:</strong> <code>${BASE_URL}/instance.tld/notice/postid</code></li>
         <li><strong>Pixelfed:</strong> <code>${BASE_URL}/instance.tld/p/username/postid</code></li>
+        <li><strong>Lemmy/PieFed:</strong> <code>${BASE_URL}/instance.tld/post/id</code> · <code>/c/community</code> · <code>/u/user</code></li>
+        <li><strong>Mbin/Kbin:</strong> <code>${BASE_URL}/instance.tld/m/magazine/t/id</code> · <code>/m/magazine</code></li>
+        <li><strong>PeerTube:</strong> <code>${BASE_URL}/instance.tld/w/videoid</code> · <code>/a/account</code></li>
         <li><strong>Profiles:</strong> <code>${BASE_URL}/instance.tld/@username</code></li>
         <li><strong>ActivityPub:</strong> <code>${BASE_URL}/instance.tld/users/username/statuses/postid</code></li>
       </ul>
@@ -160,9 +163,12 @@ app.get('/*', async (req, res) => {
           <ul style="text-align: left; display: inline-block;">
             <li><strong>Mastodon:</strong> <code>${BASE_URL}/instance.tld/@username/postid</code></li>
             <li><strong>GoToSocial:</strong> <code>${BASE_URL}/instance.tld/@username/statuses/postid</code></li>
-            <li><strong>Misskey/Firefish:</strong> <code>${BASE_URL}/instance.tld/notes/noteid</code></li>
+            <li><strong>Misskey/Firefish/Sharkey:</strong> <code>${BASE_URL}/instance.tld/notes/noteid</code></li>
             <li><strong>Pleroma/Akkoma:</strong> <code>${BASE_URL}/instance.tld/notice/postid</code></li>
             <li><strong>Pixelfed:</strong> <code>${BASE_URL}/instance.tld/p/username/postid</code></li>
+            <li><strong>Lemmy/PieFed:</strong> <code>${BASE_URL}/instance.tld/post/id</code></li>
+            <li><strong>Mbin/Kbin:</strong> <code>${BASE_URL}/instance.tld/m/magazine/t/id</code></li>
+            <li><strong>PeerTube:</strong> <code>${BASE_URL}/instance.tld/w/videoid</code></li>
           </ul>
           <p><a href="${BASE_URL}">Go to homepage</a></p>
         </body>

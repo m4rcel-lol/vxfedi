@@ -11,6 +11,21 @@
  * - /instance.tld/objects/uuid (post - Pleroma/Akkoma ActivityPub)
  * - /instance.tld/notes/noteid (post - Misskey/Firefish/Sharkey)
  * - /instance.tld/p/username/postid (post - Pixelfed)
+ * - /instance.tld/post/id (post - Lemmy/PieFed)
+ * - /instance.tld/comment/id (post - Lemmy/PieFed comment)
+ * - /instance.tld/c/community (community - Lemmy/PieFed, or channel - PeerTube)
+ * - /instance.tld/u/username (profile - Lemmy/PieFed/Mbin)
+ * - /instance.tld/m/magazine (magazine - Mbin/Kbin)
+ * - /instance.tld/m/magazine/t/id (thread - Mbin/Kbin)
+ * - /instance.tld/w/shortid (video - PeerTube)
+ * - /instance.tld/videos/watch/uuid (video - PeerTube)
+ * - /instance.tld/a/username (account - PeerTube)
+ * - /instance.tld/video-channels/name (channel - PeerTube)
+ *
+ * The optional `platform` and `subtype` fields are a routing hint for the
+ * API layer. They are only present for platforms whose URL scheme is not
+ * already covered by the generic ActivityPub/Mastodon handling above, so
+ * that the classic formats keep their original (untyped) return shape.
  */
 function parseVxUrl(path) {
   // Remove leading/trailing slashes
@@ -38,6 +53,9 @@ function parseVxUrl(path) {
   let username = null;
   let postId = null;
   let originalUrl = null;
+  // Routing hints for non-ActivityPub platforms (Lemmy, PeerTube, Mbin...)
+  let platform = null;
+  let subtype = null;
 
   // Format 1: /@username or /@username/postid or /@username/statuses/postid
   if (parts[1].startsWith('@')) {
@@ -103,17 +121,105 @@ function parseVxUrl(path) {
     postId = parts[3];
     originalUrl = `https://${instance}/p/${username}/${postId}`;
   }
+  // Format 7: /post/id (Lemmy/PieFed link-aggregator post)
+  else if (parts[1] === 'post' && parts.length === 3) {
+    resourceType = 'post';
+    postId = parts[2];
+    platform = 'lemmy';
+    subtype = 'post';
+    originalUrl = `https://${instance}/post/${postId}`;
+  }
+  // Format 8: /comment/id (Lemmy/PieFed comment)
+  else if (parts[1] === 'comment' && parts.length === 3) {
+    resourceType = 'post';
+    postId = parts[2];
+    platform = 'lemmy';
+    subtype = 'comment';
+    originalUrl = `https://${instance}/comment/${postId}`;
+  }
+  // Format 9: /c/community (Lemmy/PieFed community, or PeerTube channel)
+  else if (parts[1] === 'c' && parts.length === 3) {
+    resourceType = 'profile';
+    username = parts[2];
+    platform = 'lemmy';
+    subtype = 'community';
+    originalUrl = `https://${instance}/c/${username}`;
+  }
+  // Format 10: /u/username (Lemmy/PieFed/Mbin user)
+  else if (parts[1] === 'u' && parts.length === 3) {
+    resourceType = 'profile';
+    username = parts[2];
+    platform = 'lemmy';
+    subtype = 'user';
+    originalUrl = `https://${instance}/u/${username}`;
+  }
+  // Format 11: /m/magazine or /m/magazine/t/id (Mbin/Kbin)
+  else if (parts[1] === 'm' && (parts.length === 3 || (parts.length === 5 && parts[3] === 't'))) {
+    platform = 'mbin';
+    username = parts[2];
+    if (parts.length === 3) {
+      resourceType = 'profile';
+      subtype = 'magazine';
+      originalUrl = `https://${instance}/m/${username}`;
+    } else {
+      resourceType = 'post';
+      subtype = 'thread';
+      postId = parts[4];
+      originalUrl = `https://${instance}/m/${username}/t/${postId}`;
+    }
+  }
+  // Format 12: /w/shortid (PeerTube video, short form)
+  else if (parts[1] === 'w' && parts.length === 3) {
+    resourceType = 'post';
+    postId = parts[2];
+    platform = 'peertube';
+    subtype = 'video';
+    originalUrl = `https://${instance}/w/${postId}`;
+  }
+  // Format 13: /videos/watch/uuid (PeerTube video, canonical form)
+  else if (parts[1] === 'videos' && parts.length === 4 && parts[2] === 'watch') {
+    resourceType = 'post';
+    postId = parts[3];
+    platform = 'peertube';
+    subtype = 'video';
+    originalUrl = `https://${instance}/videos/watch/${postId}`;
+  }
+  // Format 14: /a/username (PeerTube account)
+  else if (parts[1] === 'a' && parts.length === 3) {
+    resourceType = 'profile';
+    username = parts[2];
+    platform = 'peertube';
+    subtype = 'account';
+    originalUrl = `https://${instance}/a/${username}`;
+  }
+  // Format 15: /video-channels/name (PeerTube channel)
+  else if (parts[1] === 'video-channels' && parts.length === 3) {
+    resourceType = 'profile';
+    username = parts[2];
+    platform = 'peertube';
+    subtype = 'channel';
+    originalUrl = `https://${instance}/video-channels/${username}`;
+  }
   else {
     return null;
   }
 
-  return {
+  const result = {
     instance,
     username,
     postId,
     resourceType,
     originalUrl
   };
+
+  // Only attach routing hints for the newer platforms so the classic
+  // ActivityPub formats keep their original return shape.
+  if (platform) {
+    result.platform = platform;
+    result.subtype = subtype;
+  }
+
+  return result;
 }
 
 module.exports = { parseVxUrl };
