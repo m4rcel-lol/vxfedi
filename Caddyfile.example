@@ -8,14 +8,14 @@
 # relies on (the app runs with Express "trust proxy" enabled).
 
 vx.yourdomain.tld {
-    reverse_proxy localhost:3000
+    reverse_proxy localhost:41530
 }
 
 # ---------------------------------------------------------------------------
 # Optional extras — uncomment only if you want them:
 #
 # vx.yourdomain.tld {
-#     reverse_proxy localhost:3000
+#     reverse_proxy localhost:41530
 #     encode gzip zstd                 # compress responses
 #     request_body { max_size 1MB }    # cap request size
 #     log { output file /var/log/caddy/vxfedi.log }

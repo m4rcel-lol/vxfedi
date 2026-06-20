@@ -39,7 +39,7 @@ This is the recommended deployment method for production environments.
    Update the following variables:
    ```env
    BASE_URL=https://vx.yourdomain.tld
-   PORT=3000
+   PORT=41530
    NODE_ENV=production
    ```
 
@@ -51,10 +51,10 @@ This is the recommended deployment method for production environments.
 4. **Verify the deployment**
    ```bash
    docker-compose logs -f
-   # You should see: "🚀 vxfedi server running on port 3000"
+   # You should see: "🚀 vxfedi server running on port 41530"
 
    # Test health endpoint
-   curl http://localhost:3000/health
+   curl http://localhost:41530/health
    ```
 
 5. **Configure your reverse proxy** (see [Reverse Proxy Setup](#reverse-proxy-setup))
@@ -81,7 +81,7 @@ docker build -t vxfedi .
 docker run -d \
   --name vxfedi \
   --restart unless-stopped \
-  -p 3000:3000 \
+  -p 41530:41530 \
   -e BASE_URL=https://vx.yourdomain.tld \
   -e NODE_ENV=production \
   vxfedi
@@ -166,11 +166,11 @@ Add this block to your existing `/etc/caddy/Caddyfile` (or use the included `Cad
 
 ```caddy
 vx.yourdomain.tld {
-    reverse_proxy localhost:3000
+    reverse_proxy localhost:41530
 }
 ```
 
-> Running vxfedi via `docker-compose.yml`? The container is published on `127.0.0.1:3000`, so `reverse_proxy localhost:3000` reaches it while the app stays off the public internet. See `Caddyfile.example` for optional extras (compression, request-size limits, www redirect).
+> Running vxfedi via `docker-compose.yml`? The container is published on `127.0.0.1:41530`, so `reverse_proxy localhost:41530` reaches it while the app stays off the public internet. See `Caddyfile.example` for optional extras (compression, request-size limits, www redirect).
 
 **Start Caddy:**
 
@@ -229,7 +229,7 @@ server {
     add_header X-XSS-Protection "1; mode=block" always;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:41530;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -283,8 +283,8 @@ Create `/etc/apache2/sites-available/vxfedi.conf`:
     SSLCertificateKeyFile /etc/letsencrypt/live/vx.yourdomain.tld/privkey.pem
 
     ProxyPreserveHost On
-    ProxyPass / http://localhost:3000/
-    ProxyPassReverse / http://localhost:3000/
+    ProxyPass / http://localhost:41530/
+    ProxyPassReverse / http://localhost:41530/
 
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set X-Content-Type-Options "nosniff"
@@ -304,8 +304,8 @@ sudo systemctl reload apache2
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `BASE_URL` | Yes | `http://localhost:3000` | Public URL of your vxfedi instance |
-| `PORT` | No | `3000` | Port to listen on |
+| `BASE_URL` | Yes | `http://localhost:41530` | Public URL of your vxfedi instance |
+| `PORT` | No | `41530` | Port to listen on |
 | `NODE_ENV` | No | `production` | Node environment |
 
 ### Optional Variables
@@ -321,7 +321,7 @@ sudo systemctl reload apache2
 ```env
 # Production settings
 NODE_ENV=production
-PORT=3000
+PORT=41530
 BASE_URL=https://vx.yourdomain.tld
 
 # API settings
@@ -442,7 +442,7 @@ pm2 restart vxfedi
 docker-compose logs
 
 # Verify port is not in use
-sudo netstat -tulpn | grep 3000
+sudo netstat -tulpn | grep 41530
 
 # Rebuild from scratch
 docker-compose down
@@ -522,7 +522,7 @@ limit_req_zone $binary_remote_addr zone=vxfedi:10m rate=10r/s;
 
 location / {
     limit_req zone=vxfedi burst=20;
-    proxy_pass http://localhost:3000;
+    proxy_pass http://localhost:41530;
 }
 ```
 

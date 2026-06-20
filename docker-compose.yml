@@ -7,19 +7,19 @@ services:
     restart: unless-stopped
     ports:
       # Bound to loopback so only the host (e.g. your Caddy) can reach it,
-      # not the public internet. Caddy then proxies to localhost:3000.
-      - "127.0.0.1:3000:3000"
+      # not the public internet. Caddy then proxies to localhost:41530.
+      - "127.0.0.1:41530:41530"
     environment:
       - NODE_ENV=production
-      - PORT=3000
-      - BASE_URL=${BASE_URL:-http://localhost:3000}
+      - PORT=41530
+      - BASE_URL=${BASE_URL:-http://localhost:41530}
       - USER_AGENT=${USER_AGENT:-vxfedi/1.0}
       - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-10000}
       - CACHE_MAX_AGE=${CACHE_MAX_AGE:-3600}
     env_file:
       - .env
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:41530/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
       timeout: 3s
       retries: 3
