@@ -1,10 +1,14 @@
+# vxfedi only. TLS/reverse proxy is handled by your host's Caddy
+# (already installed) — see Caddyfile.example. No Caddy container here.
 services:
   vxfedi:
     build: .
     container_name: vxfedi
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Bound to loopback so only the host (e.g. your Caddy) can reach it,
+      # not the public internet. Caddy then proxies to localhost:3000.
+      - "127.0.0.1:3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000

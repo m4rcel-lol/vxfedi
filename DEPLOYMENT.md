@@ -162,70 +162,15 @@ docker pull caddy:latest
 
 **Configuration:**
 
-Create `/etc/caddy/Caddyfile` (or use the included `Caddyfile.example`):
+Add this block to your existing `/etc/caddy/Caddyfile` (or use the included `Caddyfile.example`). That's the whole config — Caddy handles HTTPS, the HTTP→HTTPS redirect, and the `Host` / `X-Forwarded-*` headers automatically:
 
 ```caddy
 vx.yourdomain.tld {
-    # Reverse proxy to vxfedi application
-    reverse_proxy localhost:3000 {
-        # Header forwarding
-        header_up Host {host}
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-        header_up X-Forwarded-Host {host}
-        header_up X-Forwarded-Port {server_port}
-
-        # WebSocket support
-        header_up Upgrade {http.request.header.Upgrade}
-        header_up Connection {http.request.header.Connection}
-
-        # Timeouts
-        transport http {
-            dial_timeout 60s
-            response_header_timeout 60s
-            read_timeout 60s
-        }
-    }
-
-    # Security headers
-    header {
-        X-Frame-Options "SAMEORIGIN"
-        X-Content-Type-Options "nosniff"
-        X-XSS-Protection "1; mode=block"
-        Referrer-Policy "no-referrer-when-downgrade"
-        Strict-Transport-Security "max-age=31536000; includeSubDomains"
-        -Server
-    }
-
-    # Logging
-    log {
-        output file /var/log/caddy/vxfedi-access.log
-        format console
-    }
-
-    # Request size limit
-    request_body {
-        max_size 1MB
-    }
-
-    # Health check endpoint
-    handle /health {
-        reverse_proxy localhost:3000
-        log {
-            output discard
-        }
-    }
-
-    # Deny access to hidden files (files starting with .)
-    @hidden {
-        path_regexp hidden /\..+
-    }
-    handle @hidden {
-        respond 403
-    }
+    reverse_proxy localhost:3000
 }
 ```
+
+> Running vxfedi via `docker-compose.yml`? The container is published on `127.0.0.1:3000`, so `reverse_proxy localhost:3000` reaches it while the app stays off the public internet. See `Caddyfile.example` for optional extras (compression, request-size limits, www redirect).
 
 **Start Caddy:**
 
