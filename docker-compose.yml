@@ -17,7 +17,11 @@ services:
       - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-10000}
       - CACHE_MAX_AGE=${CACHE_MAX_AGE:-3600}
     env_file:
-      - .env
+      # Optional: loaded if present, but compose won't fail when it's absent.
+      # The `environment:` block above already provides working defaults, so
+      # `docker compose up` works out of the box with no .env file.
+      - path: .env
+        required: false
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:41530/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
