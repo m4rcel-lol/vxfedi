@@ -122,6 +122,117 @@ describe('parseVxUrl', () => {
     });
   });
 
+  describe('Lemmy/PieFed format', () => {
+    it('should parse /post/id', () => {
+      const result = parseVxUrl('/lemmy.world/post/123456');
+      assert.deepStrictEqual(result, {
+        instance: 'lemmy.world',
+        username: null,
+        postId: '123456',
+        resourceType: 'post',
+        originalUrl: 'https://lemmy.world/post/123456',
+        platform: 'lemmy',
+        subtype: 'post'
+      });
+    });
+
+    it('should parse /comment/id', () => {
+      const result = parseVxUrl('/lemmy.world/comment/789');
+      assert.strictEqual(result.resourceType, 'post');
+      assert.strictEqual(result.subtype, 'comment');
+      assert.strictEqual(result.postId, '789');
+    });
+
+    it('should parse /c/community as a profile', () => {
+      const result = parseVxUrl('/lemmy.world/c/technology');
+      assert.strictEqual(result.resourceType, 'profile');
+      assert.strictEqual(result.platform, 'lemmy');
+      assert.strictEqual(result.subtype, 'community');
+      assert.strictEqual(result.username, 'technology');
+    });
+
+    it('should parse a remote /c/community@instance', () => {
+      const result = parseVxUrl('/lemmy.world/c/news@beehaw.org');
+      assert.strictEqual(result.resourceType, 'profile');
+      assert.strictEqual(result.username, 'news@beehaw.org');
+    });
+
+    it('should parse /u/username as a profile', () => {
+      const result = parseVxUrl('/lemmy.world/u/ruud');
+      assert.strictEqual(result.resourceType, 'profile');
+      assert.strictEqual(result.subtype, 'user');
+      assert.strictEqual(result.username, 'ruud');
+    });
+  });
+
+  describe('Mbin/Kbin format', () => {
+    it('should parse /m/magazine as a profile', () => {
+      const result = parseVxUrl('/kbin.earth/m/random');
+      assert.deepStrictEqual(result, {
+        instance: 'kbin.earth',
+        username: 'random',
+        postId: null,
+        resourceType: 'profile',
+        originalUrl: 'https://kbin.earth/m/random',
+        platform: 'mbin',
+        subtype: 'magazine'
+      });
+    });
+
+    it('should parse /m/magazine/t/id as a thread post', () => {
+      const result = parseVxUrl('/kbin.earth/m/random/t/1462498');
+      assert.strictEqual(result.resourceType, 'post');
+      assert.strictEqual(result.platform, 'mbin');
+      assert.strictEqual(result.subtype, 'thread');
+      assert.strictEqual(result.username, 'random');
+      assert.strictEqual(result.postId, '1462498');
+    });
+  });
+
+  describe('PeerTube format', () => {
+    it('should parse /w/shortid as a video post', () => {
+      const result = parseVxUrl('/framatube.org/w/kkGMgK9ZtnKfYAgnEtQxbv');
+      assert.deepStrictEqual(result, {
+        instance: 'framatube.org',
+        username: null,
+        postId: 'kkGMgK9ZtnKfYAgnEtQxbv',
+        resourceType: 'post',
+        originalUrl: 'https://framatube.org/w/kkGMgK9ZtnKfYAgnEtQxbv',
+        platform: 'peertube',
+        subtype: 'video'
+      });
+    });
+
+    it('should parse /videos/watch/uuid', () => {
+      const result = parseVxUrl('/framatube.org/videos/watch/9c9de5e8-0a1e-484a-b099-e80766180a6d');
+      assert.strictEqual(result.resourceType, 'post');
+      assert.strictEqual(result.subtype, 'video');
+      assert.strictEqual(result.postId, '9c9de5e8-0a1e-484a-b099-e80766180a6d');
+    });
+
+    it('should parse /a/account as a profile', () => {
+      const result = parseVxUrl('/framatube.org/a/framasoft');
+      assert.strictEqual(result.resourceType, 'profile');
+      assert.strictEqual(result.subtype, 'account');
+      assert.strictEqual(result.username, 'framasoft');
+    });
+
+    it('should parse /video-channels/name as a profile', () => {
+      const result = parseVxUrl('/framatube.org/video-channels/joinpeertube');
+      assert.strictEqual(result.resourceType, 'profile');
+      assert.strictEqual(result.subtype, 'channel');
+      assert.strictEqual(result.username, 'joinpeertube');
+    });
+  });
+
+  describe('Classic formats keep their original shape', () => {
+    it('should not attach platform/subtype to Mastodon URLs', () => {
+      const result = parseVxUrl('/mastodon.social/@user/123');
+      assert.strictEqual('platform' in result, false);
+      assert.strictEqual('subtype' in result, false);
+    });
+  });
+
   describe('Invalid URLs', () => {
     it('should return null for empty path', () => {
       assert.strictEqual(parseVxUrl('/'), null);
