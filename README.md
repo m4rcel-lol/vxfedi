@@ -316,7 +316,7 @@ MIT License - see LICENSE file for details
 
 - **Repository:** https://github.com/m4rcel-lol/vxfedi
 - **Issues:** https://github.com/m4rcel-lol/vxfedi/issues
-- **Fediverse:** Join us on Mastodon!
+- **Fediverse:** Find creator on his instance! `https://index.sarl/@m5rcel`
 
 ---
 
