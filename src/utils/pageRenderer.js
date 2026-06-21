@@ -20,9 +20,12 @@ function renderLandingPage(content, metaTags, baseUrl) {
  */
 function renderPostPage(content, metaTagsHtml, baseUrl) {
   const mediaHtml = renderMediaAttachments(content.mediaAttachments);
+  // Boost chip is omitted for platforms without a boost/repost mechanism.
+  const boostStat = content.supportsReblogs !== false
+    ? `\n            <span class="stat" title="Boosts">🔁 ${formatCount(content.reblogsCount)}</span>`
+    : '';
   const stats = `
-            <span class="stat" title="Comments">💬 ${formatCount(content.repliesCount)}</span>
-            <span class="stat" title="Boosts">🔁 ${formatCount(content.reblogsCount)}</span>
+            <span class="stat" title="Comments">💬 ${formatCount(content.repliesCount)}</span>${boostStat}
             <span class="stat" title="Likes">❤️ ${formatCount(content.favouritesCount)}</span>`;
 
   return `<!DOCTYPE html>
