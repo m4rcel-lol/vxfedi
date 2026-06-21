@@ -22,17 +22,23 @@ function formatCount(value) {
  *
  * Counts are normalized per platform in fediverseApi.js:
  *   - repliesCount   -> comments / replies
- *   - reblogsCount   -> boosts / reposts / renotes (or views on PeerTube)
+ *   - reblogsCount   -> boosts / reposts / renotes
  *   - favouritesCount-> likes / favourites / upvotes / reactions
+ *
+ * The boost indicator is omitted entirely when the source platform has no
+ * boost/repost mechanism (Lemmy, Mbin/Kbin, PeerTube), signalled by
+ * `supportsReblogs === false`, so embeds don't show a misleading "🔁 0".
  */
 function buildPostStats(content) {
   if (!content || content.type !== 'post') return '';
 
-  return [
-    `💬 ${formatCount(content.repliesCount)}`,
-    `🔁 ${formatCount(content.reblogsCount)}`,
-    `❤️ ${formatCount(content.favouritesCount)}`
-  ].join('   ');
+  const parts = [`💬 ${formatCount(content.repliesCount)}`];
+  if (content.supportsReblogs !== false) {
+    parts.push(`🔁 ${formatCount(content.reblogsCount)}`);
+  }
+  parts.push(`❤️ ${formatCount(content.favouritesCount)}`);
+
+  return parts.join('   ');
 }
 
 /**

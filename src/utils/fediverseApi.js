@@ -162,6 +162,7 @@ function parsePostData(data, instance, postId) {
       createdAt: data.created_at,
       repliesCount: data.replies_count || 0,
       reblogsCount: data.reblogs_count || 0,
+      supportsReblogs: true,
       favouritesCount: data.favourites_count || 0,
       mediaAttachments: parseMediaAttachments(data.media_attachments),
       sensitive: data.sensitive || false,
@@ -189,6 +190,7 @@ function parsePostData(data, instance, postId) {
       createdAt: data.createdAt,
       repliesCount: data.repliesCount || 0,
       reblogsCount: data.renoteCount || 0,
+      supportsReblogs: true,
       favouritesCount: data.reactions ? Object.values(data.reactions).reduce((a, b) => a + b, 0) : 0,
       mediaAttachments: parseMisskeyMedia(data.files),
       sensitive: data.cw != null,
@@ -211,6 +213,7 @@ function parsePostData(data, instance, postId) {
       author: data.attributedTo?.name || data.actor?.name || 'Unknown',
       authorUrl: data.attributedTo?.id || data.attributedTo || data.actor?.id || data.actor,
       createdAt: data.published,
+      supportsReblogs: false, // Raw ActivityPub objects don't expose boost counts
       mediaAttachments: parseActivityPubMedia(data.attachment),
       sensitive: data.sensitive || false,
       instance: instance,
@@ -544,6 +547,7 @@ function parseLemmyPost(view, instance) {
     createdAt: post.published,
     repliesCount: counts.comments || 0,
     reblogsCount: 0,
+    supportsReblogs: false, // Lemmy/PieFed has no boost/repost mechanism
     favouritesCount: counts.score || counts.upvotes || 0,
     mediaAttachments,
     sensitive: post.nsfw || false,
@@ -579,6 +583,7 @@ function parseLemmyComment(view, instance) {
     createdAt: comment.published,
     repliesCount: counts.child_count || 0,
     reblogsCount: 0,
+    supportsReblogs: false, // Lemmy/PieFed has no boost/repost mechanism
     favouritesCount: counts.score || counts.upvotes || 0,
     mediaAttachments: [],
     sensitive: false,
@@ -721,7 +726,8 @@ function parsePeertubeVideo(data, instance) {
     authorAvatar: avatar,
     createdAt: data.publishedAt || data.createdAt,
     repliesCount: data.comments || 0,
-    reblogsCount: data.views || 0,
+    reblogsCount: 0,
+    supportsReblogs: false, // PeerTube has no boost/repost mechanism (views are not reposts)
     favouritesCount: data.likes || 0,
     mediaAttachments,
     sensitive: data.nsfw || false,
@@ -821,6 +827,7 @@ function parseMbinEntry(data, instance) {
     createdAt: data.createdAt,
     repliesCount: data.numComments || 0,
     reblogsCount: 0,
+    supportsReblogs: false, // Mbin/Kbin has no boost/repost mechanism
     favouritesCount: data.favourites || data.uv || 0,
     mediaAttachments,
     sensitive: data.isAdult || false,

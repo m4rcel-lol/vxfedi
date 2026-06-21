@@ -7,6 +7,7 @@
 ## ✨ Features
 
 - 🎨 **Rich Social Embeds** - Beautiful previews with titles, descriptions, media, and author info
+- 💬 **Engagement Indicators** - Comment, boost, and like counts shown right in the embed (boosts auto-hidden on platforms without a repost mechanism)
 - 🤖 **Multi-Format Support** - Generates Open Graph, Twitter Card, and oEmbed metadata
 - 🌐 **Universal Compatibility** - Works with Mastodon, GoToSocial, Pleroma/Akkoma, Misskey/Firefish/Sharkey, Pixelfed, Lemmy/PieFed, Mbin/Kbin, PeerTube, and other ActivityPub servers
 - 📱 **Smart User-Agent Detection** - Shows embeds to bots, redirects humans to original content
@@ -148,6 +149,34 @@ https://vx.yourdomain.tld/framatube.org/w/kkGMgK9ZtnKfYAgnEtQxbv
 https://vx.yourdomain.tld/framatube.org/a/framasoft
 ```
 
+## 💬 Engagement Indicators
+
+Post embeds lead with a one-line engagement summary so the numbers show up
+directly inside the preview card on Discord, Telegram, Slack, and friends:
+
+```
+💬 12   🔁 340   ❤️ 5.6K
+
+Just shipped a new feature!
+```
+
+- 💬 **Comments / replies**
+- 🔁 **Boosts / reposts** — only shown on platforms that have the mechanism
+- ❤️ **Likes / favourites / upvotes / reactions**
+
+Counts are normalized across platforms and formatted compactly (`1.5K`, `3.4M`).
+Because each network exposes engagement differently, the **boost indicator is
+omitted entirely** for platforms that have no boost/repost concept — rather than
+showing a misleading `🔁 0`.
+
+| Platform | 💬 Comments | 🔁 Boosts | ❤️ Likes |
+|----------|:----------:|:--------:|:--------:|
+| Mastodon / GoToSocial / Pleroma / Akkoma | ✅ replies | ✅ reblogs | ✅ favourites |
+| Misskey / Firefish / Sharkey | ✅ replies | ✅ renotes | ✅ reactions |
+| Lemmy / PieFed | ✅ comments | ➖ none | ✅ upvotes (score) |
+| Mbin / Kbin | ✅ comments | ➖ none | ✅ upvotes |
+| PeerTube | ✅ comments | ➖ none | ✅ likes |
+
 ## 🔧 Configuration
 
 Edit `.env` file or set environment variables:
@@ -261,9 +290,13 @@ npm run dev
 # Build Docker image
 docker build -t vxfedi .
 
-# Run tests (when available)
+# Run the test suite (Node's built-in test runner)
 npm test
 ```
+
+The project ships with unit tests covering URL parsing and the per-platform
+API normalizers (Mastodon, Misskey, Lemmy, Mbin/Kbin, PeerTube). Please keep
+them green and add coverage when introducing new platforms or fields.
 
 ## 🤝 Contributing
 
