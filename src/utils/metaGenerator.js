@@ -1,4 +1,41 @@
 /**
+ * Format an engagement count compactly: 999 -> "999", 1500 -> "1.5K",
+ * 12000 -> "12K", 3_400_000 -> "3.4M". Keeps embeds readable when posts
+ * have large numbers.
+ */
+function formatCount(value) {
+  const num = Number(value) || 0;
+  if (num < 1000) return String(num);
+
+  const compact = (n, suffix) => {
+    const rounded = n >= 100 ? Math.round(n) : Math.round(n * 10) / 10;
+    return `${rounded}${suffix}`;
+  };
+
+  if (num < 1_000_000) return compact(num / 1000, 'K');
+  return compact(num / 1_000_000, 'M');
+}
+
+/**
+ * Build a single-line engagement indicator for a post showing comments,
+ * boosts, and likes. Returns '' for non-posts so callers can no-op.
+ *
+ * Counts are normalized per platform in fediverseApi.js:
+ *   - repliesCount   -> comments / replies
+ *   - reblogsCount   -> boosts / reposts / renotes (or views on PeerTube)
+ *   - favouritesCount-> likes / favourites / upvotes / reactions
+ */
+function buildPostStats(content) {
+  if (!content || content.type !== 'post') return '';
+
+  return [
+    `💬 ${formatCount(content.repliesCount)}`,
+    `🔁 ${formatCount(content.reblogsCount)}`,
+    `❤️ ${formatCount(content.favouritesCount)}`
+  ].join('   ');
+}
+
+/**
  * Generate meta tags for Open Graph, Twitter Card, and oEmbed
  */
 function generateMetaTags(content, baseUrl, path) {
@@ -7,8 +44,17 @@ function generateMetaTags(content, baseUrl, path) {
 
   const metaTags = [];
 
+  // For posts, prefix the description with an engagement indicator line
+  // (comments · boosts · likes) so it shows up directly inside the embed
+  // card rendered by Discord, Telegram, Slack, etc.
+  const postStats = buildPostStats(content);
+  const baseDescription = content.description || 'Fediverse content';
+  const postDescription = postStats
+    ? `${postStats}\n\n${baseDescription}`
+    : baseDescription;
+
   // Basic HTML meta tags
-  metaTags.push({ name: 'description', content: content.description || 'Fediverse content' });
+  metaTags.push({ name: 'description', content: postDescription });
 
   if (content.type === 'post') {
     const firstMedia = (content.mediaAttachments && content.mediaAttachments.length > 0)
@@ -20,7 +66,7 @@ function generateMetaTags(content, baseUrl, path) {
     // type so clients (Discord, Telegram, Slack) render a player/large card.
     metaTags.push({ property: 'og:type', content: isVideo ? 'video.other' : 'article' });
     metaTags.push({ property: 'og:title', content: escapeHtml(content.title) });
-    metaTags.push({ property: 'og:description', content: escapeHtml(content.description) });
+    metaTags.push({ property: 'og:description', content: escapeHtml(postDescription) });
     metaTags.push({ property: 'og:url', content: content.url });
     metaTags.push({ property: 'og:site_name', content: 'vxfedi' });
 
@@ -82,7 +128,7 @@ function generateMetaTags(content, baseUrl, path) {
     }
 
     metaTags.push({ name: 'twitter:title', content: escapeHtml(content.title) });
-    metaTags.push({ name: 'twitter:description', content: escapeHtml(content.description) });
+    metaTags.push({ name: 'twitter:description', content: escapeHtml(postDescription) });
 
     if (content.author && content.authorUsername) {
       metaTags.push({ name: 'twitter:creator', content: `@${content.authorUsername}` });
@@ -170,5 +216,7 @@ function formatMetaTags(metaTags) {
 module.exports = {
   generateMetaTags,
   formatMetaTags,
-  escapeHtml
+  escapeHtml,
+  formatCount,
+  buildPostStats
 };

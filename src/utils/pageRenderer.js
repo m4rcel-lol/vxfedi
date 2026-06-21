@@ -1,4 +1,4 @@
-const { formatMetaTags, escapeHtml } = require('./metaGenerator');
+const { formatMetaTags, escapeHtml, formatCount } = require('./metaGenerator');
 
 /**
  * Render a landing page with content and meta tags
@@ -20,7 +20,10 @@ function renderLandingPage(content, metaTags, baseUrl) {
  */
 function renderPostPage(content, metaTagsHtml, baseUrl) {
   const mediaHtml = renderMediaAttachments(content.mediaAttachments);
-  const stats = `${content.repliesCount || 0} replies · ${content.reblogsCount || 0} boosts · ${content.favouritesCount || 0} favorites`;
+  const stats = `
+            <span class="stat" title="Comments">💬 ${formatCount(content.repliesCount)}</span>
+            <span class="stat" title="Boosts">🔁 ${formatCount(content.reblogsCount)}</span>
+            <span class="stat" title="Likes">❤️ ${formatCount(content.favouritesCount)}</span>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -106,8 +109,15 @@ function renderPostPage(content, metaTagsHtml, baseUrl) {
         .stats {
             padding: 16px 20px;
             border-top: 1px solid #3a3a3a;
-            font-size: 14px;
-            color: #888;
+            font-size: 15px;
+            color: #ccc;
+            display: flex;
+            gap: 24px;
+        }
+        .stat {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
         .footer {
             padding: 20px;
